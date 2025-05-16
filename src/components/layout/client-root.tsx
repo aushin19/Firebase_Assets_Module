@@ -6,17 +6,14 @@ import { SidebarProvider, Sidebar, SidebarInset, SidebarContent, SidebarHeader a
 import AppHeader from '@/components/layout/app-header';
 import AppSidebar from '@/components/layout/app-sidebar';
 import { motion, AnimatePresence } from 'framer-motion';
+import { usePathname } from 'next/navigation'; // Import usePathname
 
 export default function ClientRoot({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Attempt to get a unique key for AnimatePresence.
-  // This is a simplified approach. For more complex scenarios,
-  // you might need to use usePathname() or a similar router-based key.
-  const key = typeof children === 'string' ? children : (children as React.ReactElement)?.key?.toString() || 'content';
-
+  const pathname = usePathname(); // Get the current pathname
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -31,7 +28,7 @@ export default function ClientRoot({
         <AppHeader />
         <AnimatePresence mode="wait">
           <motion.main
-            key={key} // Use the derived key
+            key={pathname} // Use pathname as the key for AnimatePresence
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
