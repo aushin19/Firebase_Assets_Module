@@ -1,5 +1,7 @@
+
 "use client";
 
+import React, { useState, useEffect } from 'react';
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { UserCircle, Settings, LogOut } from "lucide-react";
@@ -12,19 +14,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
+import { useSidebar } from '../ui/sidebar'; // To check if mobile for SidebarTrigger
 
 export default function AppHeader() {
-  return (
-    <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 backdrop-blur-sm px-4 md:px-6">
+  const [mounted, setMounted] = useState(false);
+  const { isMobile } = useSidebar(); // Get isMobile from context
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const renderContent = () => (
+    <>
       <div className="flex items-center gap-2">
-        <SidebarTrigger className="md:hidden" /> {/* Hidden on md and up because sidebar is visible */}
+        {isMobile && <SidebarTrigger className="md:hidden" />}
         <Link href="/assets" className="text-xl font-semibold text-foreground hover:text-primary transition-colors">
           AssetLens
         </Link>
       </div>
       <div className="ml-auto flex items-center gap-4">
-        {/* Placeholder for future search bar or actions */}
-        {/* <Input placeholder="Search assets..." className="hidden md:block w-64" /> */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
@@ -46,6 +54,31 @@ export default function AppHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+    </>
+  );
+
+  const renderPlaceholder = () => (
+    <>
+      <div className="flex items-center gap-2">
+         {/* Render SidebarTrigger placeholder if it would be visible on mobile */}
+        {isMobile && <Button variant="ghost" size="icon" className="rounded-full opacity-0 md:hidden"><UserCircle className="h-6 w-6" /></Button>}
+        <Link href="/assets" className="text-xl font-semibold text-foreground hover:text-primary transition-colors">
+          AssetLens
+        </Link>
+      </div>
+      <div className="ml-auto flex items-center gap-4">
+        {/* Placeholder for dropdown */}
+        <Button variant="ghost" size="icon" className="rounded-full opacity-0">
+          <UserCircle className="h-6 w-6" />
+        </Button>
+      </div>
+    </>
+  );
+
+
+  return (
+    <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 backdrop-blur-sm px-4 md:px-6">
+      {mounted ? renderContent() : renderPlaceholder()}
     </header>
   );
 }
