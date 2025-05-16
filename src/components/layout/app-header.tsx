@@ -24,9 +24,11 @@ export default function AppHeader() {
     setMounted(true);
   }, []);
 
+  // This function is called only when mounted is true
   const renderContent = () => (
     <>
       <div className="flex items-center gap-2">
+        {/* Conditional rendering of SidebarTrigger is fine here, as mounted is true */}
         {isMobile && <SidebarTrigger className="md:hidden" />}
         <Link href="/assets" className="text-xl font-semibold text-foreground hover:text-primary transition-colors">
           AssetLens
@@ -57,11 +59,14 @@ export default function AppHeader() {
     </>
   );
 
+  // This function is called when mounted is false (server render and initial client render)
+  // It should be as static as possible and match server output.
+  // Server doesn't know `isMobile`, so it won't render the SidebarTrigger.
   const renderPlaceholder = () => (
     <>
       <div className="flex items-center gap-2">
-         {/* Render SidebarTrigger placeholder if it would be visible on mobile */}
-        {isMobile && <Button variant="ghost" size="icon" className="rounded-full opacity-0 md:hidden"><UserCircle className="h-6 w-6" /></Button>}
+        {/* Removed conditional SidebarTrigger placeholder. Server wouldn't render this part. */}
+        {/* The actual SidebarTrigger will appear in renderContent when mounted and isMobile is true. */}
         <Link href="/assets" className="text-xl font-semibold text-foreground hover:text-primary transition-colors">
           AssetLens
         </Link>
