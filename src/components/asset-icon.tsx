@@ -1,5 +1,5 @@
 import type { AssetType } from "@/types";
-import { Server, Laptop, Router as RouterIcon, Switch, Printer, Smartphone, HelpCircle, LucideProps } from "lucide-react";
+import { Server, Laptop, Router as RouterIcon, Network, Printer, Smartphone, HelpCircle, type LucideProps } from "lucide-react";
 
 interface AssetIconProps extends LucideProps {
   type: AssetType;
@@ -16,7 +16,7 @@ export function AssetIcon({ type, ...props }: AssetIconProps) {
     case "Router":
       return <RouterIcon {...props} />;
     case "Switch":
-      return <Switch {...props} />;
+      return <Network {...props} />;
     case "Printer":
       return <Printer {...props} />;
     case "MobileDevice":
