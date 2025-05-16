@@ -16,33 +16,37 @@ import { ScrollArea } from '../ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { cn } from '@/lib/utils';
 
-type DataRow = Record<string, any>; // Changed from CSVRow to be more generic
-type ColumnMapping = Record<keyof Asset, string | null>;
+type DataRow = Record<string, any>; 
+type ColumnMapping = Record<string, string | null>; // Key is Asset field path (e.g., 'hardware.vendor')
 
-const ASSET_FIELDS_TO_MAP: (keyof Asset)[] = [
-  'deviceId', 'name', 'description', 'documentation', 'installationDate', 'manufactureDate',
-  'stage', 'lifecycle', 'serialNumber', 'last_seen', 'zone',
-  'release', 'modified', 'exposure', 'os_firmware',
-  'last_seen_by', 'last_patch_date', 'days_since_last_patch',
-  'assignedUser', 'department', 'cpu', 'ram', 'storage', 'imageUrl',
-  'purchaseCost', 'currentValue', 'retirementDate',
-  // For complex fields like hardware, softwareList, connections, security, etc.,
-  // direct mapping from a flat CSV/JSON is tricky.
-  // Users might need to format their CSV/JSON with dot notation (e.g., hardware.vendor)
-  // or we'd need a more advanced mapping UI.
-  // For now, we'll keep it simple, focusing on top-level or easily mappable fields.
-  // Add specific nested fields if direct mapping is intended:
-  // e.g., 'hardware.vendor', 'hardware.model', 'hardware.type' (as strings)
+// Define Asset fields available for mapping. Dot notation for nested fields.
+const ASSET_FIELDS_TO_MAP: string[] = [
+  'deviceId', 'name', 'description', 'documentation', 
+  'installationDate', 'manufactureDate', 'stage', 'lifecycle', 
+  'serialNumber', 'last_seen', 'zone', 'release', 'modified', 
+  'exposure', 'os_firmware', 'last_seen_by', 'last_patch_date', 
+  'days_since_last_patch', 'assignedUser', 'department', 
+  'cpu', 'ram', 'storage', 'imageUrl', 'purchaseCost', 
+  'currentValue', 'retirementDate',
+  // Nested fields using dot notation
+  'hardware.vendor', 'hardware.model', 'hardware.type', 'hardware.category', 'hardware.version', 'hardware.endOfLife',
+  'context.location.name', 'context.location.locationId',
+  'context.referenceLocation.name',
+  'context.otSystem.name', 'context.deviceGroup',
+  'warranty.startDate', 'warranty.endDate', 'warranty.provider',
+  'criticality.rating', 'criticality.impact', 'criticality.businessCriticality',
+  'safety.certification', 'safety.level',
+  // Simple security fields (complex arrays like vulnerabilities are harder with flat import)
+  'security.authenticationMethod', 'security.encryptionEnabled', 'security.securityScore',
 ];
 
-// Simplified required fields for the purpose of this example.
-// In a real scenario, this would depend on your actual data validation rules.
-const REQUIRED_ASSET_FIELDS: (keyof Asset)[] = ['deviceId', 'name', 'stage'];
+
+const REQUIRED_ASSET_FIELDS: string[] = ['deviceId', 'name', 'stage'];
 
 
 // These are illustrative and need to align with your actual schema's expected string values for stage/type
-const ASSET_TYPE_VALUES_EXAMPLE: string[] = ['PLC', 'Laptop', 'Router', 'Workstation', 'Printer', 'MobileDevice', 'Server', 'Switch', 'Other'];
-const ASSET_STAGE_VALUES_EXAMPLE: string[] = ['Operational', 'Active', 'Online', 'In Use', 'Standby', 'Inactive', 'Offline', 'Maintenance', 'In Repair', 'End of Life', 'Disposed', 'Retired', 'Missing', 'Planning', 'Commissioning', 'Testing'];
+const ASSET_TYPE_VALUES_EXAMPLE: string[] = ['PLC', 'Laptop', 'Router', 'Workstation', 'Printer', 'MobileDevice', 'Server', 'Switch', 'Other', 'Sensor', 'HMI'];
+const ASSET_STAGE_VALUES_EXAMPLE: string[] = ['Operational', 'Active', 'Online', 'In Use', 'Standby', 'Inactive', 'Offline', 'Maintenance', 'In Repair', 'End of Life', 'Disposed', 'Retired', 'Missing', 'Planning', 'Commissioning', 'Testing', 'Active Support', 'Limited Support', 'Unsupported'];
 
 
 interface ValidatedAsset extends Partial<Asset> {
@@ -84,7 +88,7 @@ export function BulkImportStepper() {
   const [file, setFile] = useState<File | null>(null);
   const [fileHeaders, setFileHeaders] = useState<string[]>([]);
   const [fileData, setFileData] = useState<DataRow[]>([]);
-  const [columnMapping, setColumnMapping] = useState<ColumnMapping>({} as ColumnMapping);
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping>({});
   const [previewData, setPreviewData] = useState<ValidatedAsset[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
@@ -119,21 +123,39 @@ export function BulkImportStepper() {
     if (!file) return;
     setIsProcessing(true);
 
+    const processParsedData = (data: DataRow[], headers: string[]) => {
+        setFileHeaders(headers);
+        setFileData(data);
+        const initialMapping: ColumnMapping = {};
+        ASSET_FIELDS_TO_MAP.forEach(assetField => {
+          // Attempt to auto-map if header matches assetField (case-insensitive, ignore spaces for assetField)
+          // or if header matches a human-readable version of assetField
+          const simpleAssetField = assetField.toLowerCase().replace(/\s/g, '');
+          const foundHeader = headers.find(h => {
+            const simpleHeader = h.toLowerCase().replace(/\s/g, '');
+            if (simpleHeader === simpleAssetField) return true;
+            // Check for common pattern like "Hardware Vendor" json key for "hardware.vendor" asset field
+            const parts = assetField.split('.');
+            if (parts.length > 1) {
+                const readableGuess = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+                if (h === readableGuess) return true;
+            }
+            return false;
+          });
+          initialMapping[assetField] = foundHeader || null;
+        });
+        setColumnMapping(initialMapping);
+        setIsProcessing(false);
+        setCurrentStep(2);
+    };
+
+
     if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
       Papa.parse<DataRow>(file, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
-          setFileHeaders(results.meta.fields || []);
-          setFileData(results.data);
-          const initialMapping = {} as ColumnMapping;
-          ASSET_FIELDS_TO_MAP.forEach(field => {
-            const foundHeader = (results.meta.fields || []).find(h => h.toLowerCase() === String(field).toLowerCase());
-            initialMapping[field] = foundHeader || null;
-          });
-          setColumnMapping(initialMapping);
-          setIsProcessing(false);
-          setCurrentStep(2);
+          processParsedData(results.data, results.meta.fields || []);
         },
         error: (error) => {
           toast({ title: 'CSV Parsing Error', description: error.message, variant: 'destructive' });
@@ -150,17 +172,7 @@ export function BulkImportStepper() {
           if (Array.isArray(jsonData) && jsonData.length > 0) {
             if (typeof jsonData[0] === 'object' && jsonData[0] !== null) {
               const headers = Object.keys(jsonData[0]);
-              setFileHeaders(headers);
-              setFileData(jsonData);
-
-              const initialMapping = {} as ColumnMapping;
-              ASSET_FIELDS_TO_MAP.forEach(field => {
-                const foundHeader = headers.find(h => h.toLowerCase() === String(field).toLowerCase());
-                initialMapping[field] = foundHeader || null;
-              });
-              setColumnMapping(initialMapping);
-              setIsProcessing(false);
-              setCurrentStep(2);
+              processParsedData(jsonData, headers);
             } else {
               toast({ title: 'Invalid JSON Format', description: 'JSON data should be an array of objects.', variant: 'destructive' });
               setIsProcessing(false);
@@ -169,9 +181,7 @@ export function BulkImportStepper() {
             toast({ title: 'Empty JSON Array', description: 'The JSON file is an empty array. No data to import.', variant: 'default' });
             setFileHeaders([]);
             setFileData([]);
-            setIsProcessing(false);
-             // Optionally proceed to mapping if you want to allow mapping for an empty structure
-            // setCurrentStep(2);
+            processParsedData([], []); // Proceed with empty data for mapping
           }
           else {
             toast({ title: 'Invalid JSON Format', description: 'JSON file should contain an array of asset objects.', variant: 'destructive' });
@@ -193,59 +203,67 @@ export function BulkImportStepper() {
     }
   }, [file, toast]);
 
-  const handleMappingChange = (assetField: keyof Asset, csvHeader: string | null) => {
-    setColumnMapping(prev => ({ ...prev, [assetField]: csvHeader }));
+  const handleMappingChange = (assetField: string, fileHeader: string | null) => {
+    setColumnMapping(prev => ({ ...prev, [assetField]: fileHeader }));
   };
 
   const generatePreview = () => {
     setIsProcessing(true);
     const validated: ValidatedAsset[] = fileData.slice(0, 10).map(row => {
-      const asset: Partial<Asset> = { hardware: {} as Asset['hardware'] }; 
+      const asset: Partial<Asset> = {}; 
       const errors: Record<string, string> = {};
       let isValidOverall = true;
 
       ASSET_FIELDS_TO_MAP.forEach(assetFieldKey => {
-        const assetField = assetFieldKey as keyof Asset;
-        const mappedHeader = columnMapping[assetField];
+        const mappedHeader = columnMapping[assetFieldKey];
         
-        if (mappedHeader && row[mappedHeader] !== undefined) {
+        if (mappedHeader && row[mappedHeader] !== undefined && row[mappedHeader] !== null && row[mappedHeader] !== "") {
           const value = row[mappedHeader];
           
           // Basic validation example - expand as needed
-          if (assetField === 'hardware.type' && typeof value === 'string' && !ASSET_TYPE_VALUES_EXAMPLE.includes(value)) {
-             errors[assetField] = `Invalid type: ${value}.`;
+          if (assetFieldKey === 'hardware.type' && typeof value === 'string' && !ASSET_TYPE_VALUES_EXAMPLE.includes(value)) {
+             errors[assetFieldKey] = `Invalid type: ${value}. Expected one of: ${ASSET_TYPE_VALUES_EXAMPLE.join(', ')}`;
              isValidOverall = false;
-          } else if (assetField === 'stage' && typeof value === 'string' && !ASSET_STAGE_VALUES_EXAMPLE.includes(value)) {
-             errors[assetField] = `Invalid stage: ${value}.`;
+          } else if (assetFieldKey === 'stage' && typeof value === 'string' && !ASSET_STAGE_VALUES_EXAMPLE.includes(value)) {
+             errors[assetFieldKey] = `Invalid stage: ${value}. Expected one of: ${ASSET_STAGE_VALUES_EXAMPLE.join(', ')}`;
              isValidOverall = false;
-          } else if ((assetField === 'purchaseCost' || assetField === 'currentValue') && value !== null && value !== undefined && isNaN(parseFloat(String(value)))) {
-            errors[assetField] = `${String(assetField)} must be a number.`;
+          } else if ((assetFieldKey === 'purchaseCost' || assetFieldKey === 'currentValue' || assetFieldKey === 'criticality.impact' || assetFieldKey === 'criticality.businessCriticality' || assetFieldKey === 'security.securityScore' || assetFieldKey === 'days_since_last_patch') && isNaN(parseFloat(String(value)))) {
+            errors[assetFieldKey] = `${assetFieldKey} must be a number.`;
             isValidOverall = false;
-            (asset as any)[assetField] = parseFloat(String(value));
-          } else if (['installationDate', 'manufactureDate', 'last_seen', 'modified', 'last_patch_date', 'retirementDate'].includes(String(assetField))) {
+          } else if (assetFieldKey === 'security.encryptionEnabled' && typeof value !== 'boolean') {
+             errors[assetFieldKey] = `${assetFieldKey} must be true or false.`;
+             isValidOverall = false;
+          } else if (['installationDate', 'manufactureDate', 'last_seen', 'modified', 'last_patch_date', 'retirementDate', 'hardware.endOfLife', 'warranty.startDate', 'warranty.endDate'].includes(assetFieldKey)) {
             if (value && isNaN(new Date(String(value)).getTime())) {
-              errors[assetField] = `${String(assetField)} must be a valid date (e.g., YYYY-MM-DD).`;
+              errors[assetFieldKey] = `${assetFieldKey} must be a valid date (e.g., YYYY-MM-DD or ISO string).`;
               isValidOverall = false;
             }
-            (asset as any)[assetField] = value ? new Date(String(value)).toISOString() : undefined;
-          } else {
-            // Handle potential dot notation for nested properties
-            const keys = String(assetField).split('.');
-            let currentLevel = asset as any;
-            keys.forEach((key, index) => {
-              if (index === keys.length - 1) {
-                currentLevel[key] = value;
-              } else {
-                currentLevel[key] = currentLevel[key] || {};
-                currentLevel = currentLevel[key];
-              }
-            });
-            if (assetField === 'purchaseCost' || assetField === 'currentValue') {
-               if (value !== null && value !== undefined) (asset as any)[assetField] = parseFloat(String(value));
-            }
           }
-        } else if (REQUIRED_ASSET_FIELDS.includes(assetField)) {
-            errors[assetField] = `${String(assetField)} is required but not mapped or missing.`;
+          
+          // Set value, handling dot notation for nested properties
+          const keys = assetFieldKey.split('.');
+          let currentLevel = asset as any;
+          keys.forEach((key, index) => {
+            if (index === keys.length - 1) {
+              // Type conversion for specific fields
+              if ((assetFieldKey === 'purchaseCost' || assetFieldKey === 'currentValue' || assetFieldKey === 'criticality.impact' || assetFieldKey === 'criticality.businessCriticality' || assetFieldKey === 'security.securityScore' || assetFieldKey === 'days_since_last_patch') && !isNaN(parseFloat(String(value)))) {
+                currentLevel[key] = parseFloat(String(value));
+              } else if (assetFieldKey === 'security.encryptionEnabled') {
+                currentLevel[key] = String(value).toLowerCase() === 'true';
+              } else if (['installationDate', 'manufactureDate', 'last_seen', 'modified', 'last_patch_date', 'retirementDate', 'hardware.endOfLife', 'warranty.startDate', 'warranty.endDate'].includes(assetFieldKey) && !isNaN(new Date(String(value)).getTime())) {
+                currentLevel[key] = new Date(String(value)).toISOString();
+              }
+              else {
+                currentLevel[key] = value;
+              }
+            } else {
+              currentLevel[key] = currentLevel[key] || {};
+              currentLevel = currentLevel[key];
+            }
+          });
+
+        } else if (REQUIRED_ASSET_FIELDS.includes(assetFieldKey) && (!mappedHeader || row[mappedHeader] === undefined || row[mappedHeader] === null || row[mappedHeader] === "")) {
+            errors[assetFieldKey] = `${assetFieldKey} is required but not mapped or missing value.`;
             isValidOverall = false;
         }
       });
@@ -264,9 +282,10 @@ export function BulkImportStepper() {
     setTimeout(() => {
       setIsProcessing(false);
       if (validAssetsToImport.length > 0) {
+        console.log("Simulated import of valid assets:", validAssetsToImport.map(({ _originalRow, _validationErrors, _isValid, ...asset }) => asset));
         toast({
           title: 'Import Processed (Simulated)',
-          description: `Successfully processed ${validAssetsToImport.length} assets from the preview. In a real application, these would be saved.`,
+          description: `Successfully processed ${validAssetsToImport.length} assets from the preview. See console for data. In a real application, these would be saved.`,
           variant: 'default'
         });
       } else {
@@ -346,13 +365,13 @@ export function BulkImportStepper() {
             
             <div className="text-sm text-muted-foreground space-y-1">
               <p>Supported formats: CSV (.csv), JSON (.json)</p>
-              <p>Maximum file size: 10MB</p>
+              <p>Maximum file size: 10MB (example limit)</p>
             </div>
             <Alert variant="default" className="bg-secondary/30">
               <ListChecks className="h-4 w-4 text-primary" />
               <AlertTitle className="font-semibold text-foreground">Note</AlertTitle>
               <AlertDescription className="text-muted-foreground">
-                For CSV, the file should contain asset data with column headers. For JSON, provide an array of asset objects. In the next step, you will map columns/keys to database fields.
+                For CSV, the file should contain asset data with column headers. For JSON, provide an array of asset objects with flat key-value pairs or structures that can be mapped. In the next step, you will map columns/keys to database fields.
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -378,22 +397,69 @@ export function BulkImportStepper() {
             <ScrollArea className="h-[400px] pr-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
               {ASSET_FIELDS_TO_MAP.map(assetFieldKey => {
-                const assetField = assetFieldKey as keyof Asset;
-                let label = String(assetField).replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                if (assetField === 'deviceId') label = "Device ID";
-                if (assetField === 'os_firmware') label = "OS / Firmware";
+                let label = String(assetFieldKey).replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+                // Custom labels for better readability
+                if (assetFieldKey === 'deviceId') label = "Device ID";
+                else if (assetFieldKey === 'os_firmware') label = "OS / Firmware";
+                else if (assetFieldKey === 'name') label = "Asset Name";
+                else if (assetFieldKey === 'description') label = "Description";
+                else if (assetFieldKey === 'hardware.vendor') label = "Hardware Vendor";
+                else if (assetFieldKey === 'hardware.model') label = "Hardware Model";
+                else if (assetFieldKey === 'hardware.type') label = "Hardware Type";
+                else if (assetFieldKey === 'hardware.category') label = "Hardware Category";
+                else if (assetFieldKey === 'hardware.version') label = "Hardware Version";
+                else if (assetFieldKey === 'hardware.endOfLife') label = "Hardware End of Life";
+                else if (assetFieldKey === 'installationDate') label = "Installation Date";
+                else if (assetFieldKey === 'manufactureDate') label = "Manufacture Date";
+                else if (assetFieldKey === 'stage') label = "Asset Stage";
+                else if (assetFieldKey === 'lifecycle') label = "Lifecycle Stage";
+                else if (assetFieldKey === 'serialNumber') label = "Serial Number";
+                else if (assetFieldKey === 'last_seen') label = "Last Seen Timestamp";
+                else if (assetFieldKey === 'zone') label = "Network Zone";
+                else if (assetFieldKey === 'release') label = "Release Version";
+                else if (assetFieldKey === 'modified') label = "Config Last Modified Date";
+                else if (assetFieldKey === 'exposure') label = "Network Exposure";
+                else if (assetFieldKey === 'last_seen_by') label = "Last Seen By (Node)";
+                else if (assetFieldKey === 'last_patch_date') label = "Last Patch Date";
+                else if (assetFieldKey === 'days_since_last_patch') label = "Days Since Last Patch";
+                else if (assetFieldKey === 'assignedUser') label = "Assigned User";
+                else if (assetFieldKey === 'department') label = "Department";
+                else if (assetFieldKey === 'cpu') label = "CPU (Legacy)";
+                else if (assetFieldKey === 'ram') label = "RAM (Legacy)";
+                else if (assetFieldKey === 'storage') label = "Storage (Legacy)";
+                else if (assetFieldKey === 'imageUrl') label = "Image URL";
+                else if (assetFieldKey === 'purchaseCost') label = "Purchase Cost";
+                else if (assetFieldKey === 'currentValue') label = "Current Value";
+                else if (assetFieldKey === 'retirementDate') label = "Retirement Date";
+                else if (assetFieldKey === 'context.location.name') label = "Location Name";
+                else if (assetFieldKey === 'context.location.locationId') label = "Location ID";
+                else if (assetFieldKey === 'context.referenceLocation.name') label = "Reference Location Name";
+                else if (assetFieldKey === 'context.otSystem.name') label = "OT System Name";
+                else if (assetFieldKey === 'context.deviceGroup') label = "Device Group";
+                else if (assetFieldKey === 'warranty.startDate') label = "Warranty Start Date";
+                else if (assetFieldKey === 'warranty.endDate') label = "Warranty End Date";
+                else if (assetFieldKey === 'warranty.provider') label = "Warranty Provider";
+                else if (assetFieldKey === 'criticality.rating') label = "Criticality Rating";
+                else if (assetFieldKey === 'criticality.impact') label = "Criticality Impact Score";
+                else if (assetFieldKey === 'criticality.businessCriticality') label = "Business Criticality Score";
+                else if (assetFieldKey === 'safety.certification') label = "Safety Certification";
+                else if (assetFieldKey === 'safety.level') label = "Safety Level (SIL)";
+                else if (assetFieldKey === 'security.authenticationMethod') label = "Authentication Method";
+                else if (assetFieldKey === 'security.encryptionEnabled') label = "Encryption Enabled";
+                else if (assetFieldKey === 'security.securityScore') label = "Security Score";
+                else if (assetFieldKey === 'documentation') label = "Documentation URL";
                 
                 return (
-                  <div key={assetField} className="space-y-1.5">
-                    <label htmlFor={`map-${assetField}`} className="text-sm font-medium">
+                  <div key={assetFieldKey} className="space-y-1.5">
+                    <label htmlFor={`map-${assetFieldKey}`} className="text-sm font-medium">
                       {label}
-                      {REQUIRED_ASSET_FIELDS.includes(assetField) && <span className="text-destructive ml-1">*</span>}
+                      {REQUIRED_ASSET_FIELDS.includes(assetFieldKey) && <span className="text-destructive ml-1">*</span>}
                     </label>
                     <Select
-                      value={columnMapping[assetField] || ''}
-                      onValueChange={(value) => handleMappingChange(assetField, value === 'none' ? null : value)}
+                      value={columnMapping[assetFieldKey] || ''}
+                      onValueChange={(value) => handleMappingChange(assetFieldKey, value === 'none' ? null : value)}
                     >
-                      <SelectTrigger id={`map-${assetField}`}>
+                      <SelectTrigger id={`map-${assetFieldKey}`}>
                         <SelectValue placeholder="Select File Column/Key..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -412,7 +478,7 @@ export function BulkImportStepper() {
                 <AlertCircle className="h-4 w-4 text-primary" />
                 <AlertTitle className="font-semibold text-foreground">Mapping Complex Data</AlertTitle>
                 <AlertDescription className="text-muted-foreground">
-                  For complex/nested fields (e.g., 'Hardware Details', 'Software List'), ensure your JSON structure matches or use dot notation in CSV headers (e.g., `hardware.vendor`). Direct mapping of deeply nested arrays of objects might be limited.
+                  For complex/nested fields (e.g., 'Software List', 'Connections Array'), direct mapping of arrays or deeply nested objects from flat files is limited. Prepare your JSON/CSV accordingly or plan for post-import processing.
                 </AlertDescription>
             </Alert>
           </CardContent>
@@ -440,9 +506,19 @@ export function BulkImportStepper() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Status</TableHead>
-                    {ASSET_FIELDS_TO_MAP.filter(field => columnMapping[field as keyof Asset]).map(field => (
-                      <TableHead key={String(field)}>{String(field).replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</TableHead>
-                    ))}
+                    {ASSET_FIELDS_TO_MAP.filter(fieldKey => columnMapping[fieldKey]).map(fieldKey => {
+                       let label = String(fieldKey).replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+                        // Use the same label generation as in step 2 for consistency
+                        if (fieldKey === 'deviceId') label = "Device ID";
+                        else if (fieldKey === 'os_firmware') label = "OS / Firmware";
+                        else if (fieldKey === 'name') label = "Asset Name";
+                        else if (fieldKey === 'hardware.vendor') label = "Hardware Vendor";
+                        else if (fieldKey === 'hardware.model') label = "Hardware Model";
+                        else if (fieldKey === 'hardware.type') label = "Hardware Type";
+                        else if (fieldKey === 'stage') label = "Asset Stage";
+                        // Add more for other commonly mapped fields if desired
+                       return <TableHead key={String(fieldKey)}>{label}</TableHead>
+                    })}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -455,29 +531,30 @@ export function BulkImportStepper() {
                           <AlertCircle className="h-5 w-5 text-destructive" />
                         )}
                       </TableCell>
-                      {ASSET_FIELDS_TO_MAP.filter(field => columnMapping[field as keyof Asset]).map(assetFieldKey => {
-                        const assetField = assetFieldKey as keyof Asset;
-                        // Attempt to access potentially nested values for preview
-                        const keys = String(assetField).split('.');
+                      {ASSET_FIELDS_TO_MAP.filter(fieldKey => columnMapping[fieldKey]).map(assetFieldKey => {
+                        const keys = assetFieldKey.split('.');
                         let displayValue = item as any;
                         for (const key of keys) {
                           if (displayValue && typeof displayValue === 'object' && key in displayValue) {
                             displayValue = displayValue[key];
                           } else {
-                            displayValue = undefined; // Path doesn't exist
+                            displayValue = undefined; 
                             break;
                           }
                         }
                         if (typeof displayValue === 'object' && displayValue !== null) {
-                            displayValue = JSON.stringify(displayValue); // Show raw object if complex
+                            displayValue = JSON.stringify(displayValue); 
+                        } else if (typeof displayValue === 'boolean') {
+                            displayValue = displayValue ? 'true' : 'false';
                         }
 
+
                         return (
-                          <TableCell key={String(assetField)}>
+                          <TableCell key={String(assetFieldKey)}>
                             <div className="flex flex-col">
                               <span>{displayValue !== undefined && displayValue !== null ? String(displayValue) : <span className="italic text-muted-foreground">empty</span>}</span>
-                              {item._validationErrors[assetField] && (
-                                <span className="text-xs text-destructive">{item._validationErrors[assetField]}</span>
+                              {item._validationErrors[assetFieldKey] && (
+                                <span className="text-xs text-destructive">{item._validationErrors[assetFieldKey]}</span>
                               )}
                             </div>
                           </TableCell>
@@ -493,7 +570,7 @@ export function BulkImportStepper() {
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Validation Errors Found</AlertTitle>
                     <AlertDescription>
-                    Review highlighted rows. Go back to correct mappings or fix your file. Rows with errors will be skipped.
+                    Review highlighted rows. Go back to correct mappings or fix your file. Rows with errors will be skipped during import.
                     </AlertDescription>
                 </Alert>
             )}
@@ -502,7 +579,16 @@ export function BulkImportStepper() {
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>No Preview Data</AlertTitle>
                     <AlertDescription>
-                     Could not generate preview. Check mappings for required fields or file structure.
+                     Could not generate preview. Check mappings for required fields or file structure. Ensure data rows exist.
+                    </AlertDescription>
+                </Alert>
+            )}
+             {fileData.length === 0 && !isProcessing && (
+                 <Alert variant="default" className="mt-4">
+                    <AlertInfo className="h-4 w-4" />
+                    <AlertTitle>No Data Uploaded</AlertTitle>
+                    <AlertDescription>
+                     The uploaded file seems to be empty or could not be parsed. Please upload a file with data.
                     </AlertDescription>
                 </Alert>
             )}
@@ -529,10 +615,14 @@ export function BulkImportStepper() {
                 ? ` ${previewData.filter(p => p._isValid).length} asset(s) from the preview would have been imported.`
                 : ' No valid assets were available in the preview to import.'
               }
+              {previewData.filter(p => !p._isValid).length > 0 && 
+                ` ${previewData.filter(p => !p._isValid).length} row(s) had validation errors and were skipped.`
+              }
             </CardDescription>
           </CardHeader>
           <CardContent>
-             <p className="text-muted-foreground">You can now navigate to assets list or start a new import.</p>
+             <p className="text-muted-foreground">You can now navigate to the assets list or start a new import.</p>
+             {/* You could add a summary of imported/failed rows here if desired */}
           </CardContent>
           <CardFooter>
             <Button onClick={resetStepper}>
@@ -544,3 +634,12 @@ export function BulkImportStepper() {
     </div>
   );
 }
+
+// Helper icon, replace if you have a specific one or remove
+const AlertInfo = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="16" x2="12" y2="12" />
+    <line x1="12" y1="8" x2="12.01" y2="8" />
+  </svg>
+);
