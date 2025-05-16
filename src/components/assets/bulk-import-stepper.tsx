@@ -409,11 +409,35 @@ export function BulkImportStepper() {
       });
       
       REQUIRED_ASSET_FIELDS.forEach(requiredAssetField => {
-        if (!Object.values(columnMapping).includes(requiredAssetField)) {
-             errors[`_unmapped_${requiredAssetField}`] = `${getFieldLabel(requiredAssetField)} is required but not mapped.`;
-             isValidOverall = false;
+        // Check if a value for this required field exists in the partially constructed asset object
+        const keys = requiredAssetField.split('.');
+        let currentValue: any = asset;
+        for (const key of keys) {
+            if (currentValue && typeof currentValue === 'object' && key in currentValue) {
+                currentValue = currentValue[key];
+            } else {
+                currentValue = undefined;
+                break;
+            }
+        }
+
+        if (currentValue === undefined || currentValue === null || String(currentValue).trim() === "") {
+          // Only add error if no value was set from any mapping (standard or custom, if applicable to this field)
+          if (!Object.values(columnMapping).includes(requiredAssetField) && 
+              !assetExtendedMappings.some(m => `extended.${m.targetKey}` === requiredAssetField) &&
+              !hardwareExtendedMappings.some(m => `hardware.extended.${m.targetKey}` === requiredAssetField)
+          ) {
+               // This logic might be too simple if required fields can be deeply nested and targeted by custom maps
+               errors[`_unmapped_or_empty_${requiredAssetField}`] = `${getFieldLabel(requiredAssetField)} is required and is missing or empty.`;
+               isValidOverall = false;
+          } else if (Object.values(columnMapping).includes(requiredAssetField) && (currentValue === undefined || currentValue === null || String(currentValue).trim() === "")) {
+              // Mapped but empty
+              errors[`_empty_${requiredAssetField}`] = `${getFieldLabel(requiredAssetField)} is required but the mapped source field is empty.`;
+              isValidOverall = false;
+          }
         }
       });
+
 
       return { ...asset, _originalRow: row, _validationErrors: errors, _isValid: isValidOverall };
     });
@@ -429,24 +453,35 @@ export function BulkImportStepper() {
     const allValidatedAssets: ValidatedAsset[] = fileData.map(row => {
       const asset: Partial<Asset> = { extended: {}, hardware: { extended: {} } as any };
       let isValidOverall = true;
-      const errors: Record<string, string> = {};
+      const errors: Record<string, string> = {}; // For full data validation if needed, not just preview
 
       fileHeaders.forEach(fileHeaderKey => {
         const assetFieldKey = columnMapping[fileHeaderKey];
         const originalValue = row[fileHeaderKey];
         if (assetFieldKey && originalValue !== undefined && originalValue !== null && String(originalValue).trim() !== "") {
           let convertedValue: any = originalValue;
-          if (assetFieldKey === 'tags' && typeof originalValue === 'string') {
+           if (assetFieldKey === 'tags' && typeof originalValue === 'string') {
               convertedValue = originalValue.split(',').map(tag => tag.trim()).filter(tag => tag);
-          } else if (['purchaseCost', 'currentValue', /* ...other numeric fields */].includes(assetFieldKey)) {
+          } else if (['purchaseCost', 'currentValue', 'criticality.impact', 'criticality.businessCriticality', 'security.securityScore', 'days_since_last_patch', 'riskAssessment.overallRisk', 'hardware.extended.MTBF'].includes(assetFieldKey)) {
               const num = parseFloat(String(originalValue));
-              if (isNaN(num)) isValidOverall = false; else convertedValue = num;
-          } else if (['installationDate', /* ...other date fields */].includes(assetFieldKey)) {
+              if (isNaN(num)) { errors[fileHeaderKey] = `${getFieldLabel(assetFieldKey)} must be a number.`; isValidOverall = false; }
+              else { convertedValue = num; }
+          } else if (['security.encryptionEnabled', 'behavior.anomalyDetection.enabled'].includes(assetFieldKey)) {
+              if (String(originalValue).toLowerCase() === 'true') convertedValue = true;
+              else if (String(originalValue).toLowerCase() === 'false') convertedValue = false;
+              else { errors[fileHeaderKey] = `${getFieldLabel(assetFieldKey)} must be true/false.`; isValidOverall = false; }
+          } else if (['installationDate', 'manufactureDate', 'last_seen', 'modified', 'last_patch_date', 'retirementDate', 'hardware.endOfLife', 'warranty.startDate', 'warranty.endDate', 'safety.lastAssessment', 'security.lastSecurityAssessment', 'digitalTwin.lastSynced', 'maintenance.schedule.nextScheduled', 'maintenance.schedule.lastPerformed', 'behavior.anomalyDetection.lastAnomaly', 'riskAssessment.lastAssessed'].includes(assetFieldKey)) {
+            if (originalValue) {
               const date = new Date(String(originalValue));
-              if (isNaN(date.getTime())) isValidOverall = false; else convertedValue = date.toISOString();
+              if (isNaN(date.getTime())) { errors[fileHeaderKey] = `${getFieldLabel(assetFieldKey)} invalid date.`; isValidOverall = false; }
+              else { convertedValue = date.toISOString(); }
+            }
           }
-          if (isValidOverall) setNestedProperty(asset, assetFieldKey, convertedValue);
+          if(isValidOverall || errors[fileHeaderKey] === undefined) { // Only set if value is valid or no error for this specific field
+            setNestedProperty(asset, assetFieldKey, convertedValue);
+          }
         } else if (assetFieldKey && REQUIRED_ASSET_FIELDS.includes(assetFieldKey)) {
+            errors[fileHeaderKey] = `${getFieldLabel(assetFieldKey)} is required.`; // Or fileHeaderKey for the unmapped required field
             isValidOverall = false;
         }
       });
@@ -467,8 +502,22 @@ export function BulkImportStepper() {
       });
 
       REQUIRED_ASSET_FIELDS.forEach(requiredAssetField => {
-        if (!Object.values(columnMapping).includes(requiredAssetField)) {
-             isValidOverall = false;
+        const keys = requiredAssetField.split('.');
+        let currentValue: any = asset;
+        for (const key of keys) {
+            if (currentValue && typeof currentValue === 'object' && key in currentValue) {
+                currentValue = currentValue[key];
+            } else {
+                currentValue = undefined;
+                break;
+            }
+        }
+        if (currentValue === undefined || currentValue === null || String(currentValue).trim() === "") {
+          // This check is complex because the required field might not be mapped directly
+          // but through a custom mapping, or it might be missing entirely.
+          // A simpler approach: if after all mappings, the required field isn't populated in `asset`, it's an error.
+          errors[`_final_check_${requiredAssetField}`] = `${getFieldLabel(requiredAssetField)} is required and was not provided or is empty after mapping.`;
+          isValidOverall = false;
         }
       });
       return { ...asset, _originalRow: row, _validationErrors: errors, _isValid: isValidOverall };
@@ -477,10 +526,10 @@ export function BulkImportStepper() {
     const validAssetsToImport = allValidatedAssets.filter(p => p._isValid);
     const totalRecords = allValidatedAssets.length;
     const createdRecords = validAssetsToImport.length;
-    const updatedRecords = 0;
+    const updatedRecords = 0; // Simulation, no actual update logic
     const failedRecords = totalRecords - createdRecords;
 
-    setImportStats({ total, created: createdRecords, updated: updatedRecords, failed: failedRecords });
+    setImportStats({ total: totalRecords, created: createdRecords, updated: updatedRecords, failed: failedRecords });
 
     setTimeout(() => { 
       setIsProcessing(false);
@@ -509,8 +558,12 @@ export function BulkImportStepper() {
   const allPreviewItemsValid = hasPreviewData && invalidPreviewCount === 0;
 
   const unmappedFileHeaders = useMemo(() => {
-    return fileHeaders.filter(header => !columnMapping[header]);
-  }, [fileHeaders, columnMapping]);
+    return fileHeaders.filter(header => 
+        !columnMapping[header] && 
+        !assetExtendedMappings.some(m => m.sourceHeader === header) &&
+        !hardwareExtendedMappings.some(m => m.sourceHeader === header)
+    );
+  }, [fileHeaders, columnMapping, assetExtendedMappings, hardwareExtendedMappings]);
 
   const renderStepContent = () => {
     switch(currentStep) {
@@ -651,7 +704,6 @@ export function BulkImportStepper() {
                       <AlertDescription className="text-muted-foreground">For arrays (e.g., Tags) use comma-separated strings in your source file. For nested objects, ensure your source keys match the dot-notation target fields (e.g., 'hardware.vendor'). You can also map to custom extended fields below.</AlertDescription>
                   </Alert>
                 </CardContent>
-                 {/* Custom Mapping Footer - Removed for now, adding sections below */}
               </Card>
 
               {/* Custom Mapping for Asset.extended */}
@@ -668,7 +720,7 @@ export function BulkImportStepper() {
                         <SelectTrigger id="customSourceHeaderAsset"><SelectValue placeholder="Select source header..." /></SelectTrigger>
                         <SelectContent>
                           {unmappedFileHeaders.map(header => <SelectItem key={header} value={header}>{header}</SelectItem>)}
-                          {fileHeaders.filter(h => !unmappedFileHeaders.includes(h)).map(header => <SelectItem key={header} value={header} disabled>{header} (mapped)</SelectItem>)}
+                          {fileHeaders.filter(h => !unmappedFileHeaders.includes(h) && !assetExtendedMappings.some(m => m.sourceHeader === h) && !hardwareExtendedMappings.some(m => m.sourceHeader === h)).map(header => <SelectItem key={header} value={header} disabled>{header} (mapped)</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -710,7 +762,7 @@ export function BulkImportStepper() {
                         <SelectTrigger id="customSourceHeaderHardware"><SelectValue placeholder="Select source header..." /></SelectTrigger>
                         <SelectContent>
                           {unmappedFileHeaders.map(header => <SelectItem key={header} value={header}>{header}</SelectItem>)}
-                          {fileHeaders.filter(h => !unmappedFileHeaders.includes(h)).map(header => <SelectItem key={header} value={header} disabled>{header} (mapped)</SelectItem>)}
+                          {fileHeaders.filter(h => !unmappedFileHeaders.includes(h) && !assetExtendedMappings.some(m => m.sourceHeader === h) && !hardwareExtendedMappings.some(m => m.sourceHeader === h)).map(header => <SelectItem key={header} value={header} disabled>{header} (mapped)</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -783,7 +835,13 @@ export function BulkImportStepper() {
                         <TableHeader className="sticky top-0 bg-card z-10">
                           <TableRow>
                             <TableHead className="w-12">Status</TableHead>
-                            {fileHeaders.filter(fh => columnMapping[fh]).map(fh => (<TableHead key={fh}>{getFieldLabel(columnMapping[fh]!)}</TableHead>))}
+                            {fileHeaders.filter(fh => columnMapping[fh] || assetExtendedMappings.some(m => m.sourceHeader === fh) || hardwareExtendedMappings.some(m => m.sourceHeader === fh) ).map(fh => {
+                              let label = fh;
+                              if (columnMapping[fh]) label = getFieldLabel(columnMapping[fh]!);
+                              else if (assetExtendedMappings.some(m => m.sourceHeader === fh)) label = `Ext: ${assetExtendedMappings.find(m=>m.sourceHeader === fh)!.targetKey}`;
+                              else if (hardwareExtendedMappings.some(m => m.sourceHeader === fh)) label = `HW Ext: ${hardwareExtendedMappings.find(m=>m.sourceHeader === fh)!.targetKey}`;
+                              return (<TableHead key={fh}>{label}</TableHead>);
+                            })}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -794,18 +852,33 @@ export function BulkImportStepper() {
                                   <TooltipProvider><Tooltip><TooltipTrigger asChild><AlertCircle className="h-5 w-5 text-destructive cursor-help" /></TooltipTrigger>
                                     <TooltipContent className="max-w-xs bg-destructive text-destructive-foreground p-2 rounded-md shadow-lg" side="right">
                                       <ul className="list-disc pl-4 text-xs space-y-1">
-                                        {Object.entries(item._validationErrors).map(([key,errMsg]) => (<li key={key}><strong>{key.startsWith('_unmapped_') ? getFieldLabel(key.replace('_unmapped_','')) : getFieldLabel(columnMapping[key] || key) || key}:</strong> {String(errMsg)}</li>))}
+                                        {Object.entries(item._validationErrors).map(([key,errMsg]) => {
+                                           let errorFieldLabel = key;
+                                           if(columnMapping[key]) errorFieldLabel = getFieldLabel(columnMapping[key]!);
+                                           else if (key.startsWith('_unmapped_or_empty_')) errorFieldLabel = getFieldLabel(key.replace('_unmapped_or_empty_',''));
+                                           else if (key.startsWith('_empty_')) errorFieldLabel = getFieldLabel(key.replace('_empty_',''));
+                                           else if (key.startsWith('_final_check_')) errorFieldLabel = getFieldLabel(key.replace('_final_check_',''));
+
+                                           return (<li key={key}><strong>{errorFieldLabel}:</strong> {String(errMsg)}</li>)
+                                        })}
                                       </ul>
                                     </TooltipContent>
                                   </Tooltip></TooltipProvider>
                                 )}
                               </TableCell>
-                              {fileHeaders.filter(fh => columnMapping[fh]).map(fileHeaderKey => {
-                                const assetFieldKey = columnMapping[fileHeaderKey]!;
-                                const keys = assetFieldKey.split('.'); let displayValue = item as any;
-                                try { for (const key of keys) { const arrayMatch = key.match(/^(.*)\[(\d+)\]$/); if (arrayMatch) { displayValue = displayValue?.[arrayMatch[1]]?.[parseInt(arrayMatch[2])]; } else { displayValue = displayValue?.[key]; } if (displayValue === undefined) break; } } catch (e) { displayValue = undefined; }
-                                if (typeof displayValue === 'object' && displayValue !== null) { displayValue = JSON.stringify(displayValue); } else if (typeof displayValue === 'boolean') { displayValue = displayValue ? 'True' : 'False'; }
-                                return (<TableCell key={fileHeaderKey} className="py-3 text-sm"><div className={cn(item._validationErrors[fileHeaderKey] ? 'text-destructive' : '')}>{displayValue !== undefined && displayValue !== null ? String(displayValue) : <span className="italic text-muted-foreground">empty</span>}</div>{item._validationErrors[fileHeaderKey] && (<span className="text-xs text-destructive block mt-0.5">{item._validationErrors[fileHeaderKey]}</span>)}</TableCell>);
+                              {fileHeaders.filter(fh => columnMapping[fh] || assetExtendedMappings.some(m => m.sourceHeader === fh) || hardwareExtendedMappings.some(m => m.sourceHeader === fh)).map(fileHeaderKey => {
+                                const originalValue = item._originalRow[fileHeaderKey];
+                                let displayValue: any = originalValue;
+                                if (typeof displayValue === 'object' && displayValue !== null) { displayValue = JSON.stringify(displayValue); } 
+                                else if (typeof displayValue === 'boolean') { displayValue = displayValue ? 'True' : 'False'; }
+                                
+                                let cellError = item._validationErrors[fileHeaderKey]; // Check for direct error on this source header
+                                if(!cellError && columnMapping[fileHeaderKey]) { // if no direct error, check if there's an error on the mapped target field
+                                   if(item._validationErrors[`_empty_${columnMapping[fileHeaderKey]!}`]) cellError = item._validationErrors[`_empty_${columnMapping[fileHeaderKey]!}`];
+                                }
+
+
+                                return (<TableCell key={fileHeaderKey} className="py-3 text-sm"><div className={cn(cellError ? 'text-destructive' : '')}>{displayValue !== undefined && displayValue !== null ? String(displayValue) : <span className="italic text-muted-foreground">empty</span>}</div>{cellError && (<span className="text-xs text-destructive block mt-0.5">{String(cellError)}</span>)}</TableCell>);
                               })}
                             </TableRow>
                           ))}
