@@ -28,7 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import type { Asset, AssetStatus } from "@/types";
+import type { Asset, AssetStatus, AssetType } from "@/types"; // AssetStatus and AssetType are now strings
 import { AssetIcon } from "@/components/asset-icon";
 import {
   DropdownMenu,
@@ -37,19 +37,46 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
+// Updated statusVariantMap to align with new 'stage' field values from schema
 export const statusVariantMap: Record<AssetStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  Active: "default", // default is primary - this might need to be 'Operational' or other values from your new schema
-  Operational: "default",
-  Inactive: "secondary",
+  // Common operational stages
+  "Operational": "default", // Primary active state
+  "Active": "default", // General active state
+  "Online": "default",
+  "In Use": "default",
+  
+  // Standby or inactive states
+  "Standby": "secondary",
+  "Inactive": "secondary",
+  "Offline": "secondary",
+  "Not In Use": "secondary",
+
+  // Maintenance or problematic states
+  "Maintenance": "outline",
   "In Repair": "outline",
-  Disposed: "destructive",
-  Missing: "destructive",
-  "On Order": "secondary",
-  // Add other stage values from your new schema as needed
-  'Active Support': "default",
-  'End of Life': "destructive",
-  'Planning': "secondary",
-  'Maintenance': "outline",
+  "Degraded": "outline", // A state less than fully operational but not 'In Repair'
+
+  // End-of-life or disposed states
+  "End of Life": "destructive",
+  "Disposed": "destructive",
+  "Retired": "destructive",
+  "Missing": "destructive",
+
+  // Planning or pre-operational states
+  "Planning": "secondary",
+  "Commissioning": "secondary",
+  "On Order": "secondary", // Kept from old
+  "Testing": "outline",
+
+  // Support-related stages
+  "Active Support": "default",
+  "Limited Support": "outline",
+  "Unsupported": "destructive",
+
+  // Unknown or Other
+  "Unknown": "secondary", // Fallback for unknown stages
+  // Add other specific stage values from your new schema as needed
+  // e.g. "Archived": "secondary", "Decommissioned": "destructive"
 };
 
 
@@ -85,7 +112,7 @@ export const columns: ColumnDef<Asset>[] = [
     ),
   },
   {
-    accessorKey: "hardware.type", // Updated to match new schema
+    accessorKey: "hardware.type", 
     header: ({ column }) => (
       <Button
         variant="ghost"
@@ -97,26 +124,26 @@ export const columns: ColumnDef<Asset>[] = [
     ),
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
-        <AssetIcon type={row.original.hardware.type as AssetType} className="h-4 w-4 text-muted-foreground" />
-        <span>{row.original.hardware.type}</span>
+        <AssetIcon type={row.original.hardware?.type as AssetType || 'Other'} className="h-4 w-4 text-muted-foreground" />
+        <span>{row.original.hardware?.type || 'N/A'}</span>
       </div>
     ),
   },
   {
-    accessorKey: "stage", // Updated to match new schema (was 'status')
-    header: "Status", // UI label can remain 'Status'
+    accessorKey: "stage", 
+    header: "Status", 
     cell: ({ row }) => {
-      const stage = row.getValue("stage") as AssetStatus;
-      return <Badge variant={statusVariantMap[stage] || "secondary"}>{stage}</Badge>;
+      const stage = row.getValue("stage") as AssetStatus; // stage is now a string
+      return <Badge variant={statusVariantMap[stage] || "secondary"}>{stage || 'Unknown'}</Badge>;
     }
   },
   {
-    accessorKey: "assignedUser", // Kept for UI, though not in new core Device schema
+    accessorKey: "assignedUser", 
     header: "Assigned User",
     cell: ({ row }) => row.original.assignedUser || <span className="text-muted-foreground italic">Unassigned</span>,
   },
   {
-    accessorKey: "context.location.name", // Updated to match new schema
+    accessorKey: "context.location.name", 
     header: "Location",
     cell: ({ row }) => row.original.context?.location?.name || <span className="text-muted-foreground italic">N/A</span>,
   },
@@ -158,7 +185,6 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
       globalFilter,
       columnVisibility,
     },
-    // Instruct react-table to use deviceId for row ID
     getRowId: row => row.deviceId, 
   });
 
@@ -185,12 +211,12 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
               .getAllColumns()
               .filter((column) => column.getCanHide())
               .map((column) => {
-                // Custom labels for column visibility dropdown
                 let columnLabel = column.id;
                 if (column.id === 'hardware.type') columnLabel = 'Type';
                 else if (column.id === 'stage') columnLabel = 'Status';
                 else if (column.id === 'context.location.name') columnLabel = 'Location';
                 else if (column.id === 'assignedUser') columnLabel = 'Assigned User';
+                // Add more custom labels if needed for other accessor keys
 
                 return (
                   <DropdownMenuCheckboxItem
@@ -230,7 +256,7 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
-                  key={row.id} // row.id will now be deviceId due to getRowId
+                  key={row.id} 
                   data-state={row.getIsSelected() && "selected"}
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -281,4 +307,3 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
     </div>
   );
 }
-

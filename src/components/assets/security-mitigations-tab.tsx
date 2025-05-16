@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useTransition } from "react";
@@ -8,9 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { suggestSecurityMitigations, SuggestSecurityMitigationsInput, SuggestSecurityMitigationsOutput } from "@/ai/flows/suggest-security-mitigations";
-import type { Asset } from "@/types";
+import type { Asset, AssetSoftware } from "@/types"; // AssetSoftware for asset.software list
 import { Loader2, ShieldAlert, ListChecks } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ScrollArea } from "../ui/scroll-area";
+
 
 interface SecurityMitigationsTabProps {
   asset: Asset;
@@ -23,8 +26,11 @@ export function SecurityMitigationsTab({ asset }: SecurityMitigationsTabProps) {
   const [error, setError] = useState<string | null>(null);
 
   // Prepare initial form values from asset prop
-  const initialSoftwareList = asset.softwareList?.map(sw => sw.name).join(", ") || "";
-  const initialKnownVulnerabilities = asset.knownVulnerabilities?.join(", ") || "";
+  const initialSoftwareList = asset.software?.map(sw => `${sw.name} ${sw.version}`).join(", ") || asset.os_firmware || "";
+  // For known vulnerabilities, we'll derive a string from the new structured data
+  const initialKnownVulnerabilities = asset.security?.vulnerabilities
+    ?.map(vuln => `Ref: ${vuln.ref || 'N/A'}, Status: ${vuln.status || 'Unknown'}`)
+    .join("; ") || "";
 
   const [softwareList, setSoftwareList] = useState(initialSoftwareList);
   const [knownVulnerabilities, setKnownVulnerabilities] = useState(initialKnownVulnerabilities);
@@ -35,10 +41,10 @@ export function SecurityMitigationsTab({ asset }: SecurityMitigationsTabProps) {
     setMitigations(null);
 
     const aiInput: SuggestSecurityMitigationsInput = {
-      assetType: asset.assetType,
+      assetType: asset.hardware?.type || "Unknown Device Type", // Use new hardware.type
       assetName: asset.name,
       softwareList: softwareList,
-      knownVulnerabilities: knownVulnerabilities || undefined, // Optional field
+      knownVulnerabilities: knownVulnerabilities || undefined, 
     };
 
     startTransition(async () => {
@@ -51,7 +57,7 @@ export function SecurityMitigationsTab({ asset }: SecurityMitigationsTabProps) {
             description: "Security mitigations suggested.",
           });
         } else {
-          setMitigations([]); // No suggestions found
+          setMitigations([]); 
            toast({
             title: "No Suggestions",
             description: "AI could not find specific mitigations based on the input.",
@@ -76,7 +82,7 @@ export function SecurityMitigationsTab({ asset }: SecurityMitigationsTabProps) {
       <CardHeader>
         <CardTitle className="flex items-center"><ShieldAlert className="mr-2 h-6 w-6 text-primary" />AI-Powered Security Mitigations</CardTitle>
         <CardDescription>
-          Get AI-driven security mitigation suggestions based on the asset's profile and known threat intelligence.
+          Get AI-driven security mitigation suggestions based on the asset's profile.
           You can edit the software list and known vulnerabilities below to refine suggestions.
         </CardDescription>
       </CardHeader>
@@ -84,29 +90,29 @@ export function SecurityMitigationsTab({ asset }: SecurityMitigationsTabProps) {
         <div>
           <h3 className="text-lg font-semibold mb-2">Asset Profile for AI Analysis</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-md bg-secondary/30">
-            <div><Label>Asset Type</Label><Input readOnly value={asset.assetType} className="mt-1 bg-muted" /></div>
+            <div><Label>Asset Type</Label><Input readOnly value={asset.hardware?.type || "N/A"} className="mt-1 bg-muted" /></div>
             <div><Label>Asset Name</Label><Input readOnly value={asset.name} className="mt-1 bg-muted" /></div>
           </div>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="softwareList">Software List (comma-separated)</Label>
+          <Label htmlFor="softwareList">Software & Firmware List (comma-separated)</Label>
           <Textarea
             id="softwareList"
             value={softwareList}
             onChange={(e) => setSoftwareList(e.target.value)}
-            placeholder="e.g., Apache 2.4, OpenSSL 1.1.1, PHP 7.4"
+            placeholder="e.g., TIA Portal V17 FW 2.9.2, Apache 2.4, OpenSSL 1.1.1"
             rows={3}
             className="bg-background"
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="knownVulnerabilities">Known Vulnerabilities (comma-separated, optional)</Label>
+          <Label htmlFor="knownVulnerabilities">Known Vulnerabilities (summary, optional)</Label>
           <Textarea
             id="knownVulnerabilities"
             value={knownVulnerabilities}
             onChange={(e) => setKnownVulnerabilities(e.target.value)}
-            placeholder="e.g., CVE-2023-1234, Log4Shell, Outdated Apache library"
+            placeholder="e.g., Ref: CVE-2023-1234 Status: Open; ..."
             rows={3}
             className="bg-background"
           />
@@ -162,3 +168,4 @@ export function SecurityMitigationsTab({ asset }: SecurityMitigationsTabProps) {
     </Card>
   );
 }
+
