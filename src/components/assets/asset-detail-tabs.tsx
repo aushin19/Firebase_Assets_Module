@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,10 +8,23 @@ import { SecurityMitigationsTab } from "./security-mitigations-tab";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileText, HardDrive, Users, ListChecks, ShieldAlert, CalendarDays, Tag, MapPin, Binary, DollarSign } from "lucide-react";
+import { format, parseISO, isValid } from 'date-fns';
 
 interface AssetDetailTabsProps {
   asset: Asset;
 }
+
+const formatDate = (dateString?: string): string => {
+  if (!dateString) return 'N/A';
+  try {
+    const date = parseISO(dateString);
+    if (!isValid(date)) return 'N/A (Invalid Date)';
+    return format(date, 'MM/dd/yyyy'); // Consistent format
+  } catch (error) {
+    console.error("Error formatting date:", dateString, error);
+    return 'N/A (Format Error)';
+  }
+};
 
 const DetailItem: React.FC<{ label: string; value?: string | number | null; icon?: React.ReactNode }> = ({ label, value, icon }) => {
   if (value === undefined || value === null || value === "") return null;
@@ -34,13 +48,11 @@ const SoftwareListItem: React.FC<{ software: Software }> = ({ software }) => (
       </div>
       {software.vendor && <p className="text-sm text-muted-foreground">{software.vendor}</p>}
     </div>
-    {software.installDate && <p className="text-xs text-muted-foreground mt-1">Installed: {new Date(software.installDate).toLocaleDateString()}</p>}
+    {software.installDate && <p className="text-xs text-muted-foreground mt-1">Installed: {formatDate(software.installDate)}</p>}
   </li>
 );
 
 export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
-  const formatDate = (dateString?: string) => dateString ? new Date(dateString).toLocaleDateString() : 'N/A';
-
   return (
     <Tabs defaultValue="overview" className="w-full">
       <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-5 mb-6">

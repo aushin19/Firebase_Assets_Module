@@ -1,3 +1,4 @@
+
 import type { Asset } from '@/types';
 
 export const mockAssets: Asset[] = [
@@ -22,13 +23,13 @@ export const mockAssets: Asset[] = [
     manufacturer: 'Dell',
     notes: 'Hosts critical web applications. Monitored 24/7.',
     softwareList: [
-      { id: 'sw001', name: 'Apache HTTP Server', version: '2.4.54', vendor: 'Apache Foundation' },
+      { id: 'sw001', name: 'Apache HTTP Server', version: '2.4.54', vendor: 'Apache Foundation', installDate: '2022-01-20T00:00:00Z' },
       { id: 'sw002', name: 'MySQL Server', version: '8.0.30', vendor: 'Oracle' },
       { id: 'sw003', name: 'OpenSSH Server', version: '8.9p1', vendor: 'OpenBSD Project' },
     ],
     knownVulnerabilities: ['CVE-2023-1234 (Apache)', 'CVE-2023-5678 (MySQL)'],
     imageUrl: 'https://placehold.co/600x400.png',
-    lastSeen: new Date().toISOString(),
+    lastSeen: '2024-07-29T10:00:00.000Z',
     purchaseCost: 2500,
   },
   {
@@ -52,13 +53,13 @@ export const mockAssets: Asset[] = [
     manufacturer: 'Dell',
     notes: 'Used for presentations and content creation.',
     softwareList: [
-      { id: 'sw004', name: 'Microsoft Office 365', version: '2308', vendor: 'Microsoft' },
+      { id: 'sw004', name: 'Microsoft Office 365', version: '2308', vendor: 'Microsoft', installDate: '2023-03-25T00:00:00Z' },
       { id: 'sw005', name: 'Adobe Creative Cloud', version: '2023', vendor: 'Adobe' },
       { id: 'sw006', name: 'Zoom Client', version: '5.15.0', vendor: 'Zoom' },
     ],
     knownVulnerabilities: ['Outdated Zoom version (hypothetical)'],
     imageUrl: 'https://placehold.co/600x400.png',
-    lastSeen: new Date().toISOString(),
+    lastSeen: '2024-07-29T11:00:00.000Z',
     purchaseCost: 1800,
   },
   {
@@ -80,7 +81,7 @@ export const mockAssets: Asset[] = [
       { id: 'sw007', name: 'RouterOS Firmware', version: '7.5', vendor: 'MikroTik' }
     ],
     imageUrl: 'https://placehold.co/600x400.png',
-    lastSeen: new Date().toISOString(),
+    lastSeen: '2024-07-29T12:00:00.000Z',
     purchaseCost: 300,
   },
   {
@@ -108,7 +109,7 @@ export const mockAssets: Asset[] = [
       { id: 'sw010', name: 'Node.js', version: '18.17.0', vendor: 'OpenJS Foundation' }
     ],
     imageUrl: 'https://placehold.co/600x400.png',
-    lastSeen: new Date().toISOString(),
+    lastSeen: '2024-07-29T13:00:00.000Z',
     purchaseCost: 2200,
   },
   {
@@ -131,7 +132,7 @@ export const mockAssets: Asset[] = [
     ],
     knownVulnerabilities: ['CVE-2022-9999 (Old Firmware)'],
     imageUrl: 'https://placehold.co/600x400.png',
-    lastSeen: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
+    lastSeen: '2024-07-26T14:00:00.000Z', 
     purchaseCost: 450,
   }
 ];
