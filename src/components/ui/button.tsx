@@ -1,4 +1,6 @@
 
+"use client"; // Add this directive
+
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -58,7 +60,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     }
     
     return (
-      <MotionButton
+      <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         whileHover={{ scale: 1.03, transition: { duration: 0.15 } }}
