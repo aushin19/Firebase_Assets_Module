@@ -1,5 +1,6 @@
+
 import { mockAssets } from "@/data/mock-assets";
-import type { Asset } from "@/types";
+import type { Asset, AssetStatus, AssetType } from "@/types"; // Added AssetStatus, AssetType
 import { AssetDetailTabs } from "@/components/assets/asset-detail-tabs";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -8,13 +9,13 @@ import { ChevronLeft } from "lucide-react";
 import Image from "next/image";
 import { AssetIcon } from "@/components/asset-icon";
 import { Badge } from "@/components/ui/badge";
-import { statusVariantMap } from "@/components/assets/asset-data-table"; // Re-use status variant mapping
+import { statusVariantMap } from "@/components/assets/asset-data-table";
 
 // This would typically be a server component fetching data
 async function getAssetById(id: string): Promise<Asset | undefined> {
   // Simulate API call
   return new Promise((resolve) =>
-    setTimeout(() => resolve(mockAssets.find((asset) => asset.id === id)), 200)
+    setTimeout(() => resolve(mockAssets.find((asset) => asset.deviceId === id)), 200)
   );
 }
 
@@ -24,6 +25,12 @@ export default async function AssetDetailPage({ params }: { params: { id: string
   if (!asset) {
     notFound();
   }
+
+  // Ensure asset.hardware.type is treated as AssetType for the icon
+  const assetTypeForIcon = asset.hardware?.type as AssetType || 'Other';
+  // Ensure asset.stage is treated as AssetStatus for the badge
+  const assetStatusForBadge = asset.stage as AssetStatus || 'Unknown';
+
 
   return (
     <div className="container mx-auto py-6">
@@ -49,16 +56,16 @@ export default async function AssetDetailPage({ params }: { params: { id: string
         </div>
         <div className="md:w-2/3 lg:w-3/4">
           <div className="flex items-center gap-2 mb-1">
-            <AssetIcon type={asset.assetType} className="h-7 w-7 text-primary" />
+            <AssetIcon type={assetTypeForIcon} className="h-7 w-7 text-primary" />
             <h1 className="text-3xl font-bold text-foreground">{asset.name}</h1>
           </div>
-          <p className="text-sm text-muted-foreground mb-3">ID: {asset.id}</p>
+          <p className="text-sm text-muted-foreground mb-3">ID: {asset.deviceId}</p>
           <div className="flex flex-wrap gap-2 mb-4">
-            <Badge variant={statusVariantMap[asset.status] || "secondary"} className="text-sm px-3 py-1">{asset.status}</Badge>
-            <Badge variant="outline" className="text-sm px-3 py-1">{asset.assetType}</Badge>
+            <Badge variant={statusVariantMap[assetStatusForBadge] || "secondary"} className="text-sm px-3 py-1">{assetStatusForBadge}</Badge>
+            <Badge variant="outline" className="text-sm px-3 py-1">{asset.hardware?.type}</Badge>
             {asset.department && <Badge variant="outline" className="text-sm px-3 py-1">{asset.department}</Badge>}
           </div>
-          {asset.notes && <p className="text-sm text-muted-foreground mb-2">{asset.notes}</p>}
+          {asset.description && <p className="text-sm text-muted-foreground mb-2">{asset.description}</p>}
         </div>
       </div>
 
@@ -66,3 +73,4 @@ export default async function AssetDetailPage({ params }: { params: { id: string
     </div>
   );
 }
+

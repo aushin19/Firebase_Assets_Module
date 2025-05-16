@@ -38,12 +38,18 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export const statusVariantMap: Record<AssetStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  Active: "default", // default is primary
+  Active: "default", // default is primary - this might need to be 'Operational' or other values from your new schema
+  Operational: "default",
   Inactive: "secondary",
   "In Repair": "outline",
   Disposed: "destructive",
   Missing: "destructive",
   "On Order": "secondary",
+  // Add other stage values from your new schema as needed
+  'Active Support': "default",
+  'End of Life': "destructive",
+  'Planning': "secondary",
+  'Maintenance': "outline",
 };
 
 
@@ -70,16 +76,16 @@ export const columns: ColumnDef<Asset>[] = [
           data-ai-hint="asset device"
         />
         <div className="flex flex-col">
-          <Link href={`/assets/${row.original.id}`} className="font-medium hover:underline text-foreground">
+          <Link href={`/assets/${row.original.deviceId}`} className="font-medium hover:underline text-foreground">
             {row.getValue("name")}
           </Link>
-          <span className="text-xs text-muted-foreground">{row.original.id}</span>
+          <span className="text-xs text-muted-foreground">{row.original.deviceId}</span>
         </div>
       </div>
     ),
   },
   {
-    accessorKey: "assetType",
+    accessorKey: "hardware.type", // Updated to match new schema
     header: ({ column }) => (
       <Button
         variant="ghost"
@@ -91,34 +97,34 @@ export const columns: ColumnDef<Asset>[] = [
     ),
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
-        <AssetIcon type={row.original.assetType} className="h-4 w-4 text-muted-foreground" />
-        <span>{row.getValue("assetType")}</span>
+        <AssetIcon type={row.original.hardware.type as AssetType} className="h-4 w-4 text-muted-foreground" />
+        <span>{row.original.hardware.type}</span>
       </div>
     ),
   },
   {
-    accessorKey: "status",
-    header: "Status",
+    accessorKey: "stage", // Updated to match new schema (was 'status')
+    header: "Status", // UI label can remain 'Status'
     cell: ({ row }) => {
-      const status = row.getValue("status") as AssetStatus;
-      return <Badge variant={statusVariantMap[status] || "secondary"}>{status}</Badge>;
+      const stage = row.getValue("stage") as AssetStatus;
+      return <Badge variant={statusVariantMap[stage] || "secondary"}>{stage}</Badge>;
     }
   },
   {
-    accessorKey: "assignedUser",
+    accessorKey: "assignedUser", // Kept for UI, though not in new core Device schema
     header: "Assigned User",
     cell: ({ row }) => row.original.assignedUser || <span className="text-muted-foreground italic">Unassigned</span>,
   },
   {
-    accessorKey: "location",
+    accessorKey: "context.location.name", // Updated to match new schema
     header: "Location",
-    cell: ({ row }) => row.original.location || <span className="text-muted-foreground italic">N/A</span>,
+    cell: ({ row }) => row.original.context?.location?.name || <span className="text-muted-foreground italic">N/A</span>,
   },
   {
     id: "actions",
     cell: ({ row }) => (
       <Button asChild variant="ghost" size="sm">
-        <Link href={`/assets/${row.original.id}`}>
+        <Link href={`/assets/${row.original.deviceId}`}>
           <Eye className="mr-2 h-4 w-4" /> View
         </Link>
       </Button>
@@ -152,6 +158,8 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
       globalFilter,
       columnVisibility,
     },
+    // Instruct react-table to use deviceId for row ID
+    getRowId: row => row.deviceId, 
   });
 
   return (
@@ -177,6 +185,13 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
               .getAllColumns()
               .filter((column) => column.getCanHide())
               .map((column) => {
+                // Custom labels for column visibility dropdown
+                let columnLabel = column.id;
+                if (column.id === 'hardware.type') columnLabel = 'Type';
+                else if (column.id === 'stage') columnLabel = 'Status';
+                else if (column.id === 'context.location.name') columnLabel = 'Location';
+                else if (column.id === 'assignedUser') columnLabel = 'Assigned User';
+
                 return (
                   <DropdownMenuCheckboxItem
                     key={column.id}
@@ -186,7 +201,7 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
                       column.toggleVisibility(!!value)
                     }
                   >
-                    {column.id === 'assetType' ? 'Type' : column.id === 'assignedUser' ? 'Assigned User' : column.id}
+                    {columnLabel}
                   </DropdownMenuCheckboxItem>
                 )
               })}
@@ -215,7 +230,7 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
-                  key={row.id}
+                  key={row.id} // row.id will now be deviceId due to getRowId
                   data-state={row.getIsSelected() && "selected"}
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -266,3 +281,4 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
     </div>
   );
 }
+
