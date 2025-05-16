@@ -40,7 +40,7 @@ export default function RootLayout({
           </Sidebar>
           <SidebarInset>
             <AppHeader />
-            <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
+            <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 duration-500">
               {children}
             </main>
           </SidebarInset>

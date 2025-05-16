@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from "react";
@@ -11,6 +10,7 @@ import {
   FileText, HardDrive, Users, ListChecks, ShieldAlert, CalendarDays, Tag, MapPin, Binary, DollarSign, Layers, Network as NetworkIcon, Info, AlertTriangle, ClipboardCheck, Thermometer, GanttChartSquare, UserCheck, History, Settings2, Brain, Link as LinkIcon, Server, Eye, Activity, FileBadge, Users2 
 } from "lucide-react";
 import { format, parseISO, isValid } from 'date-fns';
+import { cn } from "@/lib/utils";
 
 interface AssetDetailTabsProps {
   asset: Asset;
@@ -31,7 +31,7 @@ const formatDate = (dateString?: string | Date): string => {
     if (!isValid(date)) {
       return 'N/A (Invalid Date)';
     }
-    return format(date, 'PPpp'); // Format: Jul 20, 2024, 2:30 PM
+    return format(date, 'PPpp'); 
   } catch (error) {
     console.error("Error formatting date:", dateString, error);
     return 'N/A (Format Error)';
@@ -97,32 +97,20 @@ const navigationItems = [
   { value: "ai_mitigations", label: "AI Mitigations", icon: <Brain className="mr-2 h-4 w-4" /> },
 ];
 
+const AnimatedCard: React.FC<React.ComponentProps<typeof Card>> = ({ className, children, ...props }) => (
+  <Card className={cn("motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 duration-300", className)} {...props}>
+    {children}
+  </Card>
+);
+
 export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
   const [activeSection, setActiveSection] = useState("overview");
 
-  return (
-    <div className="flex flex-col md:flex-row gap-6 md:gap-8">
-      <nav className="w-full md:w-64 lg:w-72">
-        <ScrollArea className="h-auto md:h-[calc(100vh-12rem)] md:pr-4"> {/* Adjust height as needed */}
-          <div className="flex flex-col space-y-1">
-            {navigationItems.map((item) => (
-              <Button
-                key={item.value}
-                variant={activeSection === item.value ? "secondary" : "ghost"}
-                className="w-full justify-start text-sm h-10"
-                onClick={() => setActiveSection(item.value)}
-              >
-                {item.icon}
-                {item.label}
-              </Button>
-            ))}
-          </div>
-        </ScrollArea>
-      </nav>
-
-      <div className="flex-1 min-w-0">
-        {activeSection === "overview" && (
-          <Card>
+  const renderSectionContent = () => {
+    switch (activeSection) {
+      case "overview":
+        return (
+          <AnimatedCard>
             <CardHeader>
               <CardTitle>Asset Overview</CardTitle>
               <CardDescription>General information about {asset.name}.</CardDescription>
@@ -160,11 +148,11 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
                 </div>
               )}
             </CardContent>
-          </Card>
-        )}
-
-        {activeSection === "hardware" && (
-          <Card>
+          </AnimatedCard>
+        );
+      case "hardware":
+        return (
+          <AnimatedCard>
             <CardHeader>
               <CardTitle>Hardware Details</CardTitle>
               <CardDescription>Information about the physical hardware components.</CardDescription>
@@ -196,11 +184,11 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
                 </div>
               )}
             </CardContent>
-          </Card>
-        )}
-
-        {activeSection === "context" && (
-           <Card>
+          </AnimatedCard>
+        );
+      case "context":
+        return (
+           <AnimatedCard>
             <CardHeader>
               <CardTitle>Contextual Information</CardTitle>
               <CardDescription>Location, system, and business process associations.</CardDescription>
@@ -248,11 +236,11 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
                   </div>
               )}
             </CardContent>
-          </Card>
-        )}
-        
-        {activeSection === "connections" && (
-          <Card>
+          </AnimatedCard>
+        );
+      case "connections":
+        return (
+          <AnimatedCard>
             <CardHeader>
               <CardTitle>Network Connections</CardTitle>
               <CardDescription>Details about network interfaces and connections. Found {asset.connections?.length || 0} connection(s).</CardDescription>
@@ -300,11 +288,11 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
                 <p className="text-muted-foreground">No network connection information available.</p>
               )}
             </CardContent>
-          </Card>
-        )}
-
-        {activeSection === "software" && (
-          <Card>
+          </AnimatedCard>
+        );
+      case "software":
+        return (
+          <AnimatedCard>
             <CardHeader>
               <CardTitle>OS, Firmware & Installed Software</CardTitle>
               <CardDescription>
@@ -325,11 +313,11 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
                 <p className="text-muted-foreground">No detailed software information available.</p>
               )}
             </CardContent>
-          </Card>
-        )}
-
-        {activeSection === "lifecycle" && (
-          <Card>
+          </AnimatedCard>
+        );
+      case "lifecycle":
+        return (
+          <AnimatedCard>
             <CardHeader>
               <CardTitle>Lifecycle & Assignment</CardTitle>
               <CardDescription>Installation, warranty, lifecycle stage, and user assignment.</CardDescription>
@@ -354,11 +342,11 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
               <DetailItem label="Assigned User (Legacy)" value={asset.assignedUser} icon={<Users className="h-4 w-4" />} />
               <DetailItem label="Department (Legacy)" value={asset.department} icon={<Users className="h-4 w-4" />} />
             </CardContent>
-          </Card>
-        )}
-
-        {activeSection === "security" && (
-            <Card>
+          </AnimatedCard>
+        );
+      case "security":
+        return (
+            <AnimatedCard>
                 <CardHeader>
                     <CardTitle>Security & Compliance Details</CardTitle>
                 </CardHeader>
@@ -422,11 +410,11 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
                        </div>
                     )}
                 </CardContent>
-            </Card>
-        )}
-
-        {activeSection === "maintenance" && (
-          <Card>
+            </AnimatedCard>
+        );
+      case "maintenance":
+        return (
+          <AnimatedCard>
               <CardHeader>
                   <CardTitle>Maintenance Information</CardTitle>
               </CardHeader>
@@ -440,7 +428,6 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
                     </div>
                   )}
                   <DetailItem label="Maintenance Records Count" value={asset.maintenance?.records?.length ?? 0} icon={<ListChecks className="h-4 w-4"/>} />
-                  {/* TODO: List maintenance records if available. Requires fetching actual records by ref. */}
                   {asset.maintenance?.records && asset.maintenance.records.length > 0 && (
                     <div className="pt-4 mt-4 border-t">
                        <h4 className="text-md font-semibold mb-2 text-foreground">Maintenance Record Refs:</h4>
@@ -450,11 +437,11 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
                     </div>
                   )}
               </CardContent>
-          </Card>
-        )}
-
-        {activeSection === "monitoring" && (
-          <Card>
+          </AnimatedCard>
+        );
+      case "monitoring":
+        return (
+          <AnimatedCard>
               <CardHeader>
                   <CardTitle>Monitoring & Behavior</CardTitle>
               </CardHeader>
@@ -506,11 +493,11 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
                       </div>
                    )}
               </CardContent>
-          </Card>
-        )}
-        
-        {activeSection === "risk" && (
-          <Card>
+          </AnimatedCard>
+        );
+      case "risk":
+        return (
+          <AnimatedCard>
             <CardHeader>
               <CardTitle>Risk Assessment</CardTitle>
               <CardDescription>Overall risk profile for {asset.name}.</CardDescription>
@@ -521,13 +508,38 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
               <DetailItem label="Threat Level" value={asset.riskAssessment?.threatLevel} icon={<ShieldAlert className="h-4 w-4"/>} />
               <DetailItem label="Last Assessed" value={formatDate(asset.riskAssessment?.lastAssessed)} icon={<CalendarDays className="h-4 w-4"/>} />
             </CardContent>
-          </Card>
-        )}
+          </AnimatedCard>
+        );
+      case "ai_mitigations":
+        // Ensure SecurityMitigationsTab is wrapped in AnimatedCard or similar if desired
+        return <SecurityMitigationsTab asset={asset} />;
+      default:
+        return null;
+    }
+  };
 
-        {activeSection === "ai_mitigations" && (
-          <SecurityMitigationsTab asset={asset} />
-        )}
+  return (
+    <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+      <nav className="w-full md:w-64 lg:w-72">
+        <ScrollArea className="h-auto md:h-[calc(100vh-12rem)] md:pr-4"> 
+          <div className="flex flex-col space-y-1 p-1">
+            {navigationItems.map((item) => (
+              <Button
+                key={item.value}
+                variant={activeSection === item.value ? "secondary" : "ghost"}
+                className="w-full justify-start text-sm h-10 motion-safe:transition-colors motion-safe:duration-150"
+                onClick={() => setActiveSection(item.value)}
+              >
+                {item.icon}
+                {item.label}
+              </Button>
+            ))}
+          </div>
+        </ScrollArea>
+      </nav>
 
+      <div className="flex-1 min-w-0">
+        {renderSectionContent()}
       </div>
     </div>
   );

@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  :root {
+    --background: 240 10% 3.9%; /* Dark Gray */
+    --foreground: 0 0% 98%; /* Near White */
+
+    --card: 240 4.8% 10%; /* Lighter Dark Gray for cards/panels */
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 4.8% 10%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 348 89% 47%; /* Accent #E10E37 */
+    --primary-foreground: 0 0% 98%; /* White for text on accent */
+
+    --secondary: 240 3.7% 15.9%; /* Another shade of dark gray */
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 0 0% 63.9%; /* Lighter gray for muted text */
+
+    --accent: 348 89% 47%; /* Accent #E10E37 */
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 348 70% 55%; /* A slightly less intense red for destructive, derived from accent */
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 348 89% 57%; /* Slightly lighter accent for focus rings */
+
+    --radius: 0.5rem;
+
+    /* Chart colors can be adjusted for dark theme if charts are used */
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+
+    /* Sidebar specific colors for dark theme */
+    --sidebar-background: 240 5.9% 7%; /* Very dark gray, distinct from main bg */
+    --sidebar-foreground: 0 0% 80%; /* Light gray for text */
+    --sidebar-primary: 348 89% 47%; /* Accent for active items */
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 3.7% 13%; /* Hover/accent bg for items */
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 348 89% 57%;
+  }
+
+  /* Remove .dark specific overrides if dark is the only theme, 
+     or keep if light mode might be added later and html class is toggled.
+     For now, assuming dark is default by setting vars in :root. */
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

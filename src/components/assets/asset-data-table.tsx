@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -28,7 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import type { Asset, AssetStatus, AssetType } from "@/types"; // AssetStatus and AssetType are now strings
+import type { Asset, AssetStatus, AssetType } from "@/types"; 
 import { AssetIcon } from "@/components/asset-icon";
 import {
   DropdownMenu,
@@ -36,47 +35,32 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { cn } from "@/lib/utils";
 
-// Updated statusVariantMap to align with new 'stage' field values from schema
 export const statusVariantMap: Record<AssetStatus, "default" | "secondary" | "destructive" | "outline"> = {
-  // Common operational stages
-  "Operational": "default", // Primary active state
-  "Active": "default", // General active state
+  "Operational": "default", 
+  "Active": "default", 
   "Online": "default",
   "In Use": "default",
-  
-  // Standby or inactive states
   "Standby": "secondary",
   "Inactive": "secondary",
   "Offline": "secondary",
   "Not In Use": "secondary",
-
-  // Maintenance or problematic states
   "Maintenance": "outline",
   "In Repair": "outline",
-  "Degraded": "outline", // A state less than fully operational but not 'In Repair'
-
-  // End-of-life or disposed states
+  "Degraded": "outline", 
   "End of Life": "destructive",
   "Disposed": "destructive",
   "Retired": "destructive",
   "Missing": "destructive",
-
-  // Planning or pre-operational states
   "Planning": "secondary",
   "Commissioning": "secondary",
-  "On Order": "secondary", // Kept from old
+  "On Order": "secondary", 
   "Testing": "outline",
-
-  // Support-related stages
   "Active Support": "default",
   "Limited Support": "outline",
   "Unsupported": "destructive",
-
-  // Unknown or Other
-  "Unknown": "secondary", // Fallback for unknown stages
-  // Add other specific stage values from your new schema as needed
-  // e.g. "Archived": "secondary", "Decommissioned": "destructive"
+  "Unknown": "secondary", 
 };
 
 
@@ -133,7 +117,7 @@ export const columns: ColumnDef<Asset>[] = [
     accessorKey: "stage", 
     header: "Status", 
     cell: ({ row }) => {
-      const stage = row.getValue("stage") as AssetStatus; // stage is now a string
+      const stage = row.getValue("stage") as AssetStatus; 
       return <Badge variant={statusVariantMap[stage] || "secondary"}>{stage || 'Unknown'}</Badge>;
     }
   },
@@ -216,7 +200,6 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
                 else if (column.id === 'stage') columnLabel = 'Status';
                 else if (column.id === 'context.location.name') columnLabel = 'Location';
                 else if (column.id === 'assignedUser') columnLabel = 'Assigned User';
-                // Add more custom labels if needed for other accessor keys
 
                 return (
                   <DropdownMenuCheckboxItem
@@ -258,6 +241,10 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
                 <TableRow
                   key={row.id} 
                   data-state={row.getIsSelected() && "selected"}
+                  className={cn(
+                    "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 duration-300 ease-out",
+                    "hover:bg-muted/60 hover:shadow-md transition-all"
+                  )}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
