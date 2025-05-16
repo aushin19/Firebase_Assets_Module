@@ -1,12 +1,12 @@
 
 "use client";
 
-import React from "react"; // Added React import
+import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import type { Asset, AssetSoftware } from "@/types"; // AssetSoftware matches the software objects in Device.software
+import type { Asset, AssetSoftware } from "@/types";
 import { SecurityMitigationsTab } from "./security-mitigations-tab";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"; // Import ScrollBar
 import { FileText, HardDrive, Users, ListChecks, ShieldAlert, CalendarDays, Tag, MapPin, Binary, DollarSign, Layers, Network, Info, AlertTriangle, ClipboardCheck, Thermometer, GanttChartSquare, UserCheck, History, Settings2, Brain } from "lucide-react";
 import { format, parseISO, isValid } from 'date-fns';
 
@@ -66,18 +66,21 @@ const SoftwareListItem: React.FC<{ software: AssetSoftware }> = ({ software }) =
 export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
   return (
     <Tabs defaultValue="overview" className="w-full">
-      <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-5 mb-6">
-        <TabsTrigger value="overview"><FileText className="mr-2 h-4 w-4" />Overview</TabsTrigger>
-        <TabsTrigger value="hardware"><HardDrive className="mr-2 h-4 w-4" />Hardware</TabsTrigger>
-        <TabsTrigger value="context"><Layers className="mr-2 h-4 w-4" />Context & Location</TabsTrigger>
-        <TabsTrigger value="connections"><Network className="mr-2 h-4 w-4" />Connections</TabsTrigger>
-        <TabsTrigger value="software"><ListChecks className="mr-2 h-4 w-4" />Software</TabsTrigger>
-        <TabsTrigger value="lifecycle"><GanttChartSquare className="mr-2 h-4 w-4" />Lifecycle & Assignment</TabsTrigger>
-        <TabsTrigger value="security"><ShieldAlert className="mr-2 h-4 w-4" />Security & Compliance</TabsTrigger>
-        <TabsTrigger value="maintenance"><Settings2 className="mr-2 h-4 w-4" />Maintenance</TabsTrigger>
-        <TabsTrigger value="monitoring"><Brain className="mr-2 h-4 w-4" />Monitoring & Behavior</TabsTrigger>
-        {/* Add more tabs as needed, e.g., Compliance, Risk, Digital Twin, etc. */}
-      </TabsList>
+      <ScrollArea className="w-full whitespace-nowrap mb-6">
+        <TabsList className=""> {/* Removed grid classes, relying on default inline-flex and ScrollArea for layout */}
+          <TabsTrigger value="overview"><FileText className="mr-2 h-4 w-4" />Overview</TabsTrigger>
+          <TabsTrigger value="hardware"><HardDrive className="mr-2 h-4 w-4" />Hardware</TabsTrigger>
+          <TabsTrigger value="context"><Layers className="mr-2 h-4 w-4" />Context & Location</TabsTrigger>
+          <TabsTrigger value="connections"><Network className="mr-2 h-4 w-4" />Connections</TabsTrigger>
+          <TabsTrigger value="software"><ListChecks className="mr-2 h-4 w-4" />Software</TabsTrigger>
+          <TabsTrigger value="lifecycle"><GanttChartSquare className="mr-2 h-4 w-4" />Lifecycle & Assignment</TabsTrigger>
+          <TabsTrigger value="security"><ShieldAlert className="mr-2 h-4 w-4" />Security & Compliance</TabsTrigger>
+          <TabsTrigger value="maintenance"><Settings2 className="mr-2 h-4 w-4" />Maintenance</TabsTrigger>
+          <TabsTrigger value="monitoring"><Brain className="mr-2 h-4 w-4" />Monitoring & Behavior</TabsTrigger>
+          {/* Add more tabs as needed, e.g., Compliance, Risk, Digital Twin, etc. */}
+        </TabsList>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
 
       <TabsContent value="overview">
         <Card>
