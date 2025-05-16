@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -36,7 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-const statusVariantMap: Record<AssetStatus, "default" | "secondary" | "destructive" | "outline"> = {
+export const statusVariantMap: Record<AssetStatus, "default" | "secondary" | "destructive" | "outline"> = {
   Active: "default", // default is primary
   Inactive: "secondary",
   "In Repair": "outline",
