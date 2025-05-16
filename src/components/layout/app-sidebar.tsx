@@ -11,6 +11,7 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
 } from '@/components/ui/sidebar';
+import React, { useState, useEffect } from 'react';
 
 const navItems = [
   { href: '/assets', label: 'Assets', icon: Package },
@@ -21,27 +22,38 @@ const navItems = [
 
 export default function AppSidebar() {
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <div className="flex h-full flex-col">
       <SidebarMenu className="p-2">
-        {navItems.map((item) => (
-          <SidebarMenuItem key={item.label}>
-            <Link href={item.href} passHref legacyBehavior>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname.startsWith(item.href)}
-                tooltip={item.label}
-                className="justify-start"
-              >
-                <a>
-                  <item.icon className="h-5 w-5" />
-                  <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
-                </a>
-              </SidebarMenuButton>
-            </Link>
-          </SidebarMenuItem>
-        ))}
+        {navItems.map((item) => {
+          // Determine active state only after component has mounted on the client
+          // This ensures consistency with server render, where 'mounted' would effectively be false.
+          const isActive = mounted ? pathname.startsWith(item.href) : false;
+          
+          return (
+            <SidebarMenuItem key={item.label}>
+              <Link href={item.href} passHref legacyBehavior>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive}
+                  tooltip={item.label}
+                  className="justify-start"
+                >
+                  <a>
+                    <item.icon className="h-5 w-5" />
+                    <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                  </a>
+                </SidebarMenuButton>
+              </Link>
+            </SidebarMenuItem>
+          );
+        })}
       </SidebarMenu>
 
       {/* Example of another group if needed */}
