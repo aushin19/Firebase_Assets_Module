@@ -1,9 +1,11 @@
+
 // src/components/assets/bulk-import-stepper.tsx
 "use client";
 
 import React, { useState, useCallback } from 'react';
 import Papa from 'papaparse';
 import { AlertCircle, CheckCircle, ChevronLeft, ChevronRight, FileUp, Loader2, ListChecks, Eye, UploadCloud, Check, X as XIcon } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -27,9 +29,9 @@ const ASSET_FIELDS_TO_MAP: string[] = [
   'exposure', 'os_firmware', 'last_seen_by', 'last_patch_date',
   'days_since_last_patch', 'assignedUser', 'department',
   'cpu', 'ram', 'storage', 'imageUrl', 'purchaseCost',
-  'currentValue', 'retirementDate', 'tags',
+  'currentValue', 'retirementDate', 'tags', // tags should be comma-separated in source
   'hardware.vendor', 'hardware.model', 'hardware.type', 'hardware.category', 'hardware.version', 'hardware.endOfLife', 'hardware.orderNumber', 'hardware.vendorLink', 'hardware.description', 'hardware.ref',
-  'hardware.extended.MTBF', 'hardware.extended.customField1', // Example nested extended
+  'hardware.extended.MTBF', 'hardware.extended.powerConsumption',
   'context.location.name', 'context.location.locationId', 'context.location.ref',
   'context.referenceLocation.name', 'context.referenceLocation.locationId', 'context.referenceLocation.ref',
   'context.otSystem.name', 'context.otSystem.id', 'context.deviceGroup',
@@ -38,17 +40,20 @@ const ASSET_FIELDS_TO_MAP: string[] = [
   'criticality.rating', 'criticality.impact', 'criticality.businessCriticality',
   'safety.certification', 'safety.level', 'safety.lastAssessment',
   'security.authenticationMethod', 'security.encryptionEnabled', 'security.securityScore', 'security.lastSecurityAssessment',
-  // 'security.vulnerabilities[0].ref', // Array, handle as string/special logic
-  // 'security.securityControls[0].ref', // Array
-  // 'connections[0].network', 'connections[0].L3Address', 'connections[0].L2Address', // Array
+  // Arrays like vulnerabilities, securityControls, connections would need more complex mapping logic if imported directly from flat files.
+  // For simplicity, we might expect them as stringified JSON or handle them with special post-processing.
+  // 'security.vulnerabilities[0].ref',
+  // 'security.securityControls[0].ref',
+  // 'connections[0].network', 'connections[0].L3Address', 'connections[0].L2Address',
   'digitalTwin.ref', 'digitalTwin.lastSynced',
   'maintenance.schedule.frequency', 'maintenance.schedule.nextScheduled', 'maintenance.schedule.lastPerformed',
-  // 'maintenance.records[0].ref', // Array
-  // 'behavior.normalPatterns[0].type', // Array
+  // 'maintenance.records[0].ref',
+  // 'behavior.normalPatterns[0].type',
   'behavior.anomalyDetection.enabled', 'behavior.anomalyDetection.sensitivity', 'behavior.anomalyDetection.lastAnomaly',
   'riskAssessment.overallRisk', 'riskAssessment.impactToBusinessProcesses', 'riskAssessment.threatLevel', 'riskAssessment.lastAssessed',
-  'extended.customField1', 'extended.customField2', // Top-level extended
+  'extended.customField1', 'extended.customField2', // Top-level extended fields
 ];
+
 
 const REQUIRED_ASSET_FIELDS: string[] = ['deviceId', 'name', 'stage'];
 
@@ -91,15 +96,53 @@ const StepperConnector: React.FC<{isCompleted?: boolean; isActive?:boolean}> = (
 const getFieldLabel = (fieldKey: string): string => {
   if (!fieldKey) return "N/A";
   const overrides: Record<string, string> = {
-    'deviceId': "Device ID", 'name': "Asset Name", 'os_firmware': "OS / Firmware",
-    'hardware.vendor': "Hardware Vendor", 'hardware.model': "Hardware Model", 'hardware.type': "Hardware Type", 'hardware.category': "Hardware Category",
-    'hardware.version': "Hardware Version", 'hardware.endOfLife': "Hardware End of Life", 'hardware.ref': "Hardware Ref",
+    'deviceId': "Device ID", 'name': "Asset Name", 'os_firmware': "OS / Firmware", 'last_seen': "Last Seen",
+    'hardware.vendor': "Hardware Vendor", 'hardware.model': "Hardware Model", 'hardware.type': "Hardware Type",
+    'hardware.category': "Hardware Category", 'hardware.version': "Hardware Version", 'hardware.endOfLife': "HW End of Life",
+    'hardware.orderNumber': "HW Order Number", 'hardware.vendorLink': "HW Vendor Link", 'hardware.description': "HW Description", 'hardware.ref': "HW Ref",
+    'hardware.extended.MTBF': "HW MTBF (Years)", 'hardware.extended.powerConsumption': "HW Power Consumption",
     'context.location.name': "Location Name", 'context.location.locationId': "Location ID", 'context.location.ref': "Location Ref",
-    'tags': 'Tags (comma-separated)',
+    'context.referenceLocation.name': "Ref Location Name", 'context.referenceLocation.locationId': "Ref Location ID", 'context.referenceLocation.ref': "Ref Location Ref",
+    'context.otSystem.name': "OT System Name", 'context.otSystem.id': "OT System ID", 'context.deviceGroup': "Device Group",
+    'context.businessProcesses[0].name': "Business Process 1 Name", 'context.businessProcesses[0].criticality': "BP1 Criticality", 'context.businessProcesses[0].role': "BP1 Role", 'context.businessProcesses[0].ref': "BP1 Ref",
+    'warranty.startDate': "Warranty Start", 'warranty.endDate': "Warranty End", 'warranty.provider': "Warranty Provider", 'warranty.terms': "Warranty Terms",
+    'criticality.rating': "Criticality Rating", 'criticality.impact': "Impact Score", 'criticality.businessCriticality': "Business Criticality Score",
+    'safety.certification': "Safety Certification", 'safety.level': "Safety Level (SIL)", 'safety.lastAssessment': "Last Safety Assessment",
+    'security.authenticationMethod': "Auth Method", 'security.encryptionEnabled': "Encryption Enabled", 'security.securityScore': "Security Score", 'security.lastSecurityAssessment': "Last Security Assessment",
+    'digitalTwin.ref': "Digital Twin Ref", 'digitalTwin.lastSynced': "Digital Twin Synced",
+    'maintenance.schedule.frequency': "Maint. Frequency", 'maintenance.schedule.nextScheduled': "Next Maint.", 'maintenance.schedule.lastPerformed': "Last Maint.",
+    'behavior.anomalyDetection.enabled': "Anomaly Detection On", 'behavior.anomalyDetection.sensitivity': "Anomaly Sensitivity", 'behavior.anomalyDetection.lastAnomaly': "Last Anomaly",
+    'riskAssessment.overallRisk': "Overall Risk Score", 'riskAssessment.impactToBusinessProcesses': "Risk Impact to BP", 'riskAssessment.threatLevel': "Threat Level", 'riskAssessment.lastAssessed': "Last Risk Assessment",
+    'extended.customField1': "Custom Field 1", 'extended.customField2': "Custom Field 2",
+    'tags': 'Tags (comma-separated in source)',
   };
   if (overrides[fieldKey]) return overrides[fieldKey];
-  return fieldKey.split('.').map(part => part.replace(/([A-Z0-9])/g, ' $1').replace(/\[\d+\]/g, '').replace(/^./, str => str.toUpperCase()).trim()).join(' - ');
+
+  // Generic label for dot notation if not overridden
+  return fieldKey.split('.').map(part =>
+    part.replace(/([A-Z0-9])/g, ' $1') // Add space before capitals/numbers
+        .replace(/\[(\d+)\]/g, ' $1') // Handle array indices like [0] -> 0
+        .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
+        .trim()
+  ).join(' - ');
 };
+
+interface StatBlockProps {
+  title: string;
+  value: number | string;
+  bgColor: string;
+  textColor: string;
+  icon?: React.ReactNode;
+}
+
+const StatBlock: React.FC<StatBlockProps> = ({ title, value, bgColor, textColor, icon }) => (
+  <div className={cn("p-4 rounded-lg shadow flex flex-col items-center justify-center text-center h-28", bgColor, textColor)}>
+    {icon && <div className="mb-1">{icon}</div>}
+    <p className="text-2xl font-bold">{value}</p>
+    <p className="text-xs">{title}</p>
+  </div>
+);
+
 
 export function BulkImportStepper() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -114,6 +157,8 @@ export function BulkImportStepper() {
 
   const [updateExisting, setUpdateExisting] = useState("yes_update");
   const [errorHandling, setErrorHandling] = useState("no_stop");
+  const [importStats, setImportStats] = useState<{ total: number; created: number; updated: number; failed: number } | null>(null);
+
 
   const steps = [
     { number: 1, title: "Upload File" },
@@ -143,11 +188,12 @@ export function BulkImportStepper() {
   const parseFile = useCallback(() => {
     if (!file) return;
     setIsProcessing(true);
-    setFileData([]); setFileHeaders([]); setColumnMapping({}); setPreviewData([]); // Reset states
+    setFileData([]); setFileHeaders([]); setColumnMapping({}); setPreviewData([]); setImportStats(null);
 
     const processParsedData = (data: DataRow[], headers: string[]) => {
         setFileHeaders(headers);
         setFileData(data);
+        // Auto-map attempt
         const initialMapping: ColumnMapping = {};
         headers.forEach(header => {
             const simpleHeader = header.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/gi, '');
@@ -157,7 +203,7 @@ export function BulkImportStepper() {
                 const labelBasedGuess = getFieldLabel(assetField).toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/gi, '');
                 if (labelBasedGuess === simpleHeader) return true;
                 const parts = assetField.split('.');
-                if (parts.length > 1 && parts[parts.length - 1].toLowerCase() === simpleHeader) return true; // Match last part of dot notation
+                if (parts.length > 1 && parts[parts.length - 1].toLowerCase().replace(/\[\d+\]/g, '') === simpleHeader) return true;
                 return false;
             });
             initialMapping[header] = foundAssetField || null;
@@ -221,9 +267,51 @@ export function BulkImportStepper() {
     setColumnMapping(prev => ({ ...prev, [fileHeaderKey]: assetFieldKey }));
   };
 
+  // Helper to set nested properties in an object
+  const setNestedProperty = (obj: any, path: string, value: any) => {
+    const keys = path.split('.');
+    let current = obj;
+    keys.forEach((key, index) => {
+      const arrayMatch = key.match(/^(.*)\[(\d+)\]$/);
+      let actualKey = key;
+      let arrayIndex: number | undefined = undefined;
+
+      if (arrayMatch) {
+        actualKey = arrayMatch[1];
+        arrayIndex = parseInt(arrayMatch[2]);
+      }
+
+      if (index === keys.length - 1) { // Last key in path
+        if (arrayIndex !== undefined) {
+          if (!current[actualKey] || !Array.isArray(current[actualKey])) {
+            current[actualKey] = [];
+          }
+          current[actualKey][arrayIndex] = value;
+        } else {
+          current[actualKey] = value;
+        }
+      } else { // Not the last key, ensure object/array structure
+        if (arrayIndex !== undefined) {
+          if (!current[actualKey] || !Array.isArray(current[actualKey])) {
+            current[actualKey] = [];
+          }
+          if (!current[actualKey][arrayIndex]) {
+            current[actualKey][arrayIndex] = {};
+          }
+          current = current[actualKey][arrayIndex];
+        } else {
+          if (!current[actualKey] || typeof current[actualKey] !== 'object') {
+            current[actualKey] = {};
+          }
+          current = current[actualKey];
+        }
+      }
+    });
+  };
+
   const generatePreview = () => {
     setIsProcessing(true);
-    setPreviewData([]); // Reset preview data
+    setPreviewData([]);
     const validated: ValidatedAsset[] = fileData.slice(0, 10).map(row => {
       const asset: Partial<Asset> = {};
       const errors: Record<string, string> = {};
@@ -231,75 +319,55 @@ export function BulkImportStepper() {
 
       fileHeaders.forEach(fileHeaderKey => {
         const assetFieldKey = columnMapping[fileHeaderKey];
-        const value = row[fileHeaderKey];
+        const originalValue = row[fileHeaderKey];
 
-        if (assetFieldKey) {
-          if (value !== undefined && value !== null && String(value).trim() !== "") {
-            // Basic validation example
-            if (assetFieldKey === 'hardware.type' && typeof value === 'string' && !ASSET_TYPE_VALUES_EXAMPLE.includes(value)) {
-               errors[fileHeaderKey] = `Invalid type: ${value}. Expected one of: ${ASSET_TYPE_VALUES_EXAMPLE.join(', ')}`;
-               isValidOverall = false;
-            } else if (assetFieldKey === 'stage' && typeof value === 'string' && !ASSET_STAGE_VALUES_EXAMPLE.includes(value)) {
-               errors[fileHeaderKey] = `Invalid stage: ${value}. Expected one of: ${ASSET_STAGE_VALUES_EXAMPLE.join(', ')}`;
-               isValidOverall = false;
-            } else if (['purchaseCost', 'currentValue', 'criticality.impact', 'criticality.businessCriticality', 'security.securityScore', 'days_since_last_patch', 'riskAssessment.overallRisk'].includes(assetFieldKey) && isNaN(parseFloat(String(value)))) {
-              errors[fileHeaderKey] = `${getFieldLabel(assetFieldKey)} must be a number. Got: ${value}`;
-              isValidOverall = false;
-            } else if (assetFieldKey === 'security.encryptionEnabled' && typeof value !== 'boolean' && String(value).toLowerCase() !== 'true' && String(value).toLowerCase() !== 'false') {
-               errors[fileHeaderKey] = `${getFieldLabel(assetFieldKey)} must be true/false. Got: ${value}`;
-               isValidOverall = false;
-            } else if (['installationDate', 'manufactureDate', 'last_seen', 'modified', 'last_patch_date', 'retirementDate', 'hardware.endOfLife', 'warranty.startDate', 'warranty.endDate', 'safety.lastAssessment', 'security.lastSecurityAssessment', 'digitalTwin.lastSynced', 'maintenance.schedule.nextScheduled', 'maintenance.schedule.lastPerformed', 'behavior.anomalyDetection.lastAnomaly', 'riskAssessment.lastAssessed'].includes(assetFieldKey)) {
-              if (value && isNaN(new Date(String(value)).getTime())) {
-                errors[fileHeaderKey] = `${getFieldLabel(assetFieldKey)} invalid date. Got: ${value}`;
+        if (assetFieldKey) { // If this column is mapped
+          if (originalValue !== undefined && originalValue !== null && String(originalValue).trim() !== "") {
+            let convertedValue: any = originalValue;
+            
+            // Basic type conversions / special handling
+            if (assetFieldKey === 'tags' && typeof originalValue === 'string') {
+              convertedValue = originalValue.split(',').map(tag => tag.trim()).filter(tag => tag);
+            } else if (['purchaseCost', 'currentValue', 'criticality.impact', 'criticality.businessCriticality', 'security.securityScore', 'days_since_last_patch', 'riskAssessment.overallRisk', 'hardware.extended.MTBF'].includes(assetFieldKey)) {
+              const num = parseFloat(String(originalValue));
+              if (isNaN(num)) {
+                errors[fileHeaderKey] = `${getFieldLabel(assetFieldKey)} must be a number. Got: ${originalValue}`;
+                isValidOverall = false;
+              } else {
+                convertedValue = num;
+              }
+            } else if (['security.encryptionEnabled', 'behavior.anomalyDetection.enabled'].includes(assetFieldKey)) {
+              if (String(originalValue).toLowerCase() === 'true') convertedValue = true;
+              else if (String(originalValue).toLowerCase() === 'false') convertedValue = false;
+              else {
+                errors[fileHeaderKey] = `${getFieldLabel(assetFieldKey)} must be true/false. Got: ${originalValue}`;
                 isValidOverall = false;
               }
+            } else if (['installationDate', 'manufactureDate', 'last_seen', 'modified', 'last_patch_date', 'retirementDate', 'hardware.endOfLife', 'warranty.startDate', 'warranty.endDate', 'safety.lastAssessment', 'security.lastSecurityAssessment', 'digitalTwin.lastSynced', 'maintenance.schedule.nextScheduled', 'maintenance.schedule.lastPerformed', 'behavior.anomalyDetection.lastAnomaly', 'riskAssessment.lastAssessed'].includes(assetFieldKey)) {
+              if (originalValue) {
+                const date = new Date(String(originalValue));
+                if (isNaN(date.getTime())) {
+                  errors[fileHeaderKey] = `${getFieldLabel(assetFieldKey)} is not a valid date. Got: ${originalValue}`;
+                  isValidOverall = false;
+                } else {
+                  convertedValue = date.toISOString();
+                }
+              }
+            }
+            // TODO: Add more specific validations as needed
+            if (assetFieldKey === 'hardware.type' && typeof convertedValue === 'string' && !ASSET_TYPE_VALUES_EXAMPLE.includes(convertedValue)) {
+              // errors[fileHeaderKey] = `Invalid type: ${convertedValue}. Not in example list.`; // Example validation
+              // isValidOverall = false; // Can be relaxed if type isn't strict
+            } else if (assetFieldKey === 'stage' && typeof convertedValue === 'string' && !ASSET_STAGE_VALUES_EXAMPLE.includes(convertedValue)) {
+              // errors[fileHeaderKey] = `Invalid stage: ${convertedValue}. Not in example list.`;
+              // isValidOverall = false;
+            }
+            
+            if(isValidOverall || errors[fileHeaderKey] === undefined) { // Only set if no conversion error
+                setNestedProperty(asset, assetFieldKey, convertedValue);
             }
 
-            // Set value, handling dot notation
-            const keys = assetFieldKey.split('.');
-            let currentLevel = asset as any;
-            keys.forEach((key, index) => {
-              const arrayMatch = key.match(/^(.*)\[(\d+)\]$/); // Match array syntax like 'tags[0]'
-              let actualKey = key;
-              let arrayIndex: number | undefined = undefined;
-
-              if(arrayMatch){
-                actualKey = arrayMatch[1];
-                arrayIndex = parseInt(arrayMatch[2]);
-              }
-
-              if (index === keys.length - 1) {
-                let convertedValue: any = value;
-                if (['purchaseCost', /* ... other numeric fields */].includes(assetFieldKey)) convertedValue = parseFloat(String(value));
-                else if (assetFieldKey === 'security.encryptionEnabled') convertedValue = String(value).toLowerCase() === 'true';
-                else if (assetFieldKey === 'tags' && typeof value === 'string') convertedValue = value.split(',').map(tag => tag.trim()).filter(tag => tag);
-                else if (['installationDate', /* ... other date fields */].includes(assetFieldKey) && !isNaN(new Date(String(value)).getTime())) convertedValue = new Date(String(value)).toISOString();
-                
-                if (arrayIndex !== undefined) {
-                  if (!currentLevel[actualKey] || !Array.isArray(currentLevel[actualKey])) {
-                    currentLevel[actualKey] = [];
-                  }
-                  currentLevel[actualKey][arrayIndex] = convertedValue;
-                } else {
-                  currentLevel[actualKey] = convertedValue;
-                }
-              } else {
-                if (arrayIndex !== undefined) {
-                  if (!currentLevel[actualKey] || !Array.isArray(currentLevel[actualKey])) {
-                    currentLevel[actualKey] = [];
-                  }
-                  if(!currentLevel[actualKey][arrayIndex]){
-                     currentLevel[actualKey][arrayIndex] = {};
-                  }
-                  currentLevel = currentLevel[actualKey][arrayIndex];
-                } else {
-                  currentLevel[actualKey] = currentLevel[actualKey] || {};
-                  currentLevel = currentLevel[actualKey];
-                }
-              }
-            });
           } else if (REQUIRED_ASSET_FIELDS.includes(assetFieldKey)) {
-            // Value is empty, but field is required
             errors[fileHeaderKey] = `${getFieldLabel(assetFieldKey)} is required but has no value.`;
             isValidOverall = false;
           }
@@ -307,8 +375,11 @@ export function BulkImportStepper() {
       });
       
       REQUIRED_ASSET_FIELDS.forEach(requiredAssetField => {
+        // Check if a mapped source column *targeting* this required field actually has a value.
+        // This is complex if multiple source columns could map to the same target.
+        // For now, simpler: if it's not targeted by any mapping, it's an error.
         if (!Object.values(columnMapping).includes(requiredAssetField)) {
-             errors[`_unmapped_${requiredAssetField}`] = `${getFieldLabel(requiredAssetField)} is required but not mapped from any source column.`;
+             errors[`_unmapped_${requiredAssetField}`] = `${getFieldLabel(requiredAssetField)} is required but not mapped.`;
              isValidOverall = false;
         }
       });
@@ -322,63 +393,68 @@ export function BulkImportStepper() {
 
   const handleImport = () => {
     setIsProcessing(true);
-    // This would be the place to process all fileData, not just previewData
-    const allValidatedAssets: ValidatedAsset[] = fileData.map(row => { // Re-validate all for production
+    setImportStats(null); 
+
+    const allValidatedAssets: ValidatedAsset[] = fileData.map(row => {
       const asset: Partial<Asset> = {};
-      let isValidOverall = true; // Simplified for this example
-      // ... (full validation logic as in generatePreview for each row)
+      let isValidOverall = true;
+      const errors: Record<string, string> = {}; // For full validation, though not displayed in step 4 summary
+
       fileHeaders.forEach(fileHeaderKey => {
         const assetFieldKey = columnMapping[fileHeaderKey];
-        if (assetFieldKey && row[fileHeaderKey] !== undefined && row[fileHeaderKey] !== null && String(row[fileHeaderKey]).trim() !== "") {
-          const value = row[fileHeaderKey];
-          const keys = assetFieldKey.split('.');
-          let currentLevel = asset as any;
-          keys.forEach((key, index) => {
-            const arrayMatch = key.match(/^(.*)\[(\d+)\]$/);
-            let actualKey = key;
-            let arrayIndex: number | undefined = undefined;
-            if(arrayMatch){ actualKey = arrayMatch[1]; arrayIndex = parseInt(arrayMatch[2]); }
+        const originalValue = row[fileHeaderKey];
+        if (assetFieldKey && originalValue !== undefined && originalValue !== null && String(originalValue).trim() !== "") {
+          let convertedValue: any = originalValue;
+          // Basic conversions (could be refactored into a helper)
+          if (assetFieldKey === 'tags' && typeof originalValue === 'string') {
+              convertedValue = originalValue.split(',').map(tag => tag.trim()).filter(tag => tag);
+          } else if (['purchaseCost', 'currentValue', 'criticality.impact', /* ...other numeric fields */].includes(assetFieldKey)) {
+              const num = parseFloat(String(originalValue));
+              if (isNaN(num)) isValidOverall = false; else convertedValue = num;
+          } else if (['installationDate', /* ...other date fields */].includes(assetFieldKey)) {
+              const date = new Date(String(originalValue));
+              if (isNaN(date.getTime())) isValidOverall = false; else convertedValue = date.toISOString();
+          }
+          
+          if (isValidOverall) setNestedProperty(asset, assetFieldKey, convertedValue);
 
-            if (index === keys.length - 1) {
-              let convertedValue: any = value;
-              if (['purchaseCost', /* ... */].includes(assetFieldKey)) convertedValue = parseFloat(String(value));
-              else if (assetFieldKey === 'tags' && typeof value === 'string') convertedValue = value.split(',').map(tag => tag.trim()).filter(tag => tag);
-              else if (['installationDate', /* ... */].includes(assetFieldKey) && !isNaN(new Date(String(value)).getTime())) convertedValue = new Date(String(value)).toISOString();
-              
-              if(arrayIndex !== undefined){ currentLevel[actualKey] = currentLevel[actualKey] || []; currentLevel[actualKey][arrayIndex] = convertedValue; }
-              else { currentLevel[actualKey] = convertedValue; }
-            } else {
-              if(arrayIndex !== undefined){ currentLevel[actualKey] = currentLevel[actualKey] || []; currentLevel[actualKey][arrayIndex] = currentLevel[actualKey][arrayIndex] || {}; currentLevel = currentLevel[actualKey][arrayIndex]; }
-              else { currentLevel[actualKey] = currentLevel[actualKey] || {}; currentLevel = currentLevel[actualKey]; }
-            }
-          });
         } else if (assetFieldKey && REQUIRED_ASSET_FIELDS.includes(assetFieldKey)) {
-            isValidOverall = false;
+            isValidOverall = false; // Missing required field
         }
       });
       REQUIRED_ASSET_FIELDS.forEach(requiredAssetField => {
         if (!Object.values(columnMapping).includes(requiredAssetField)) {
-             isValidOverall = false;
+             isValidOverall = false; // Required field not mapped
         }
       });
-      return { ...asset, _originalRow: row, _validationErrors: {}, _isValid: isValidOverall }; // Errors not re-calculated here for brevity
+      return { ...asset, _originalRow: row, _validationErrors: errors, _isValid: isValidOverall };
     });
 
     const validAssetsToImport = allValidatedAssets.filter(p => p._isValid);
-    const invalidAssetCount = allValidatedAssets.length - validAssetsToImport.length;
+    const totalRecords = allValidatedAssets.length;
+    const createdRecords = validAssetsToImport.length; // Assuming all valid are "created" for now
+    const updatedRecords = 0; // Not implemented yet
+    const failedRecords = totalRecords - createdRecords;
 
-    setTimeout(() => { // Simulate API call
+    setImportStats({
+      total: totalRecords,
+      created: createdRecords,
+      updated: updatedRecords,
+      failed: failedRecords,
+    });
+
+    setTimeout(() => { 
       setIsProcessing(false);
-      if (validAssetsToImport.length > 0) {
-        console.log("Simulated import of all valid assets:", validAssetsToImport.map(({ _originalRow, _validationErrors, _isValid, ...asset }) => asset));
+      if (createdRecords > 0) {
+        console.log("Simulated import of valid assets:", validAssetsToImport.map(({ _originalRow, _validationErrors, _isValid, ...asset }) => asset));
         toast({
           title: 'Import Processed (Simulated)',
-          description: `Successfully processed ${validAssetsToImport.length} assets from the file. ${invalidAssetCount} assets had errors and were skipped. See console for data.`,
+          description: `Successfully processed ${createdRecords} assets. ${failedRecords} assets had errors.`,
         });
       } else {
          toast({
           title: 'No Valid Assets to Import',
-          description: `No valid assets found in the file or all ${allValidatedAssets.length} assets had errors.`,
+          description: `No valid assets found or all ${totalRecords} assets had errors.`,
           variant: 'destructive'
         });
       }
@@ -395,6 +471,7 @@ export function BulkImportStepper() {
     setPreviewData([]);
     setCurrentStep(1);
     setIsProcessing(false);
+    setImportStats(null);
   }
 
   const hasPreviewData = previewData.length > 0;
@@ -475,7 +552,7 @@ export function BulkImportStepper() {
             </Button>
             <Button onClick={parseFile} disabled={!file || isProcessing}>
               {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              NEXT
+              NEXT <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
           </CardFooter>
         </Card>
@@ -601,7 +678,7 @@ export function BulkImportStepper() {
             <CardTitle className="flex items-center">
               <Eye className="mr-2 h-6 w-6 text-primary"/>Validate Import Data
             </CardTitle>
-            <CardDescription>Review the validation status of your import data preview.</CardDescription>
+            <CardDescription>Review the validation status of your import data preview. Only the first 10 rows are shown for preview.</CardDescription>
           </CardHeader>
           <CardContent>
             {isProcessing ? (
@@ -619,7 +696,7 @@ export function BulkImportStepper() {
                 </Alert>
             ) : !hasPreviewData && fileData.length === 0 ? (
                  <Alert variant="default">
-                    <AlertInfo className="h-4 w-4" />
+                    <AlertCircle className="h-4 w-4" /> {/* Changed to AlertCircle for consistency */}
                     <AlertTitle>No Data Uploaded</AlertTitle>
                     <AlertDescription>
                      The uploaded file seems to be empty or could not be parsed. Please go back and upload a file with data.
@@ -627,21 +704,21 @@ export function BulkImportStepper() {
                 </Alert>
             ) : allPreviewItemsValid ? (
               <div className="space-y-6">
-                <div className="bg-green-50 border border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-700 dark:text-green-400 p-4 rounded-md flex items-start space-x-3">
-                  <CheckCircle className="h-6 w-6 text-green-500 dark:text-green-400 flex-shrink-0" />
+                <div className="flex items-start space-x-3 rounded-md border border-green-300 bg-green-50 p-4 text-green-700 dark:border-green-600 dark:bg-green-900/30 dark:text-green-400">
+                  <CheckCircle className="h-6 w-6 flex-shrink-0 text-green-500 dark:text-green-400" />
                   <div>
                     <p className="font-semibold">Validation Successful</p>
-                    <p className="text-sm">No validation errors found in the preview. The data is ready to be imported.</p>
+                    <p className="text-sm">No validation errors found in the previewed data. The data is ready to be imported.</p>
                   </div>
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold mb-2 text-foreground">Validation Summary</h3>
                   <div className="flex items-center space-x-2 text-green-700 dark:text-green-400">
                     <CheckCircle className="h-5 w-5" />
-                    <p className="font-medium">All previewed data is valid</p>
+                    <p className="font-medium">All {validPreviewCount} previewed record(s) are valid.</p>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Click 'IMPORT' to proceed with importing the {validPreviewCount} valid records from the preview into the database.
+                    Click 'IMPORT' to proceed with importing all {fileData.length} records from the file into the database (simulation).
                   </p>
                 </div>
               </div>
@@ -651,7 +728,9 @@ export function BulkImportStepper() {
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Validation Issues Found</AlertTitle>
                     <AlertDescription>
-                    {invalidPreviewCount} of {previewData.length} previewed records have errors. Please review the table below. Rows with errors will be skipped if you proceed with the import.
+                    {invalidPreviewCount} of {previewData.length} previewed records have errors. Please review the table below. 
+                    Rows with errors will be skipped if you proceed with the import and 'Skip rows with errors' option is selected.
+                    Otherwise, the import may stop.
                     </AlertDescription>
                 </Alert>
                 <ScrollArea className="h-[400px] border rounded-md">
@@ -679,7 +758,7 @@ export function BulkImportStepper() {
                                   <TooltipContent className="max-w-xs bg-destructive text-destructive-foreground p-2 rounded-md shadow-lg" side="right">
                                     <ul className="list-disc pl-4 text-xs space-y-1">
                                       {Object.entries(item._validationErrors).map(([key,errMsg]) => (
-                                        <li key={key}><strong>{key.startsWith('_unmapped_') ? getFieldLabel(key.replace('_unmapped_','')) : getFieldLabel(key) || key}:</strong> {String(errMsg)}</li>
+                                        <li key={key}><strong>{key.startsWith('_unmapped_') ? getFieldLabel(key.replace('_unmapped_','')) : getFieldLabel(columnMapping[key] || key) || key}:</strong> {String(errMsg)}</li>
                                       ))}
                                     </ul>
                                   </TooltipContent>
@@ -734,7 +813,7 @@ export function BulkImportStepper() {
             </Button>
             <Button 
               onClick={handleImport} 
-              disabled={isProcessing || !hasPreviewData || (errorHandling === "no_stop" && invalidPreviewCount > 0)}
+              disabled={isProcessing || !hasPreviewData || (errorHandling === "no_stop" && invalidPreviewCount > 0 && fileData.length > 0)}
             >
               {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               IMPORT
@@ -746,20 +825,67 @@ export function BulkImportStepper() {
       {currentStep === 4 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center"><CheckCircle className="mr-2 h-6 w-6 text-green-500"/>Step 4: Import Complete (Simulated)</CardTitle>
-            <CardDescription>
-              The asset import process has been simulated. Processed {fileData.length} row(s) from the file.
-              {/* This summary needs to be updated based on the actual import result not previewData */}
-            </CardDescription>
+            <CardTitle className="flex items-center"><CheckCircle className="mr-2 h-6 w-6 text-green-500"/>Import Results</CardTitle>
           </CardHeader>
-          <CardContent>
-             <p className="text-muted-foreground">You can now navigate to the assets list or start a new import.</p>
-             {/* TODO: Add a summary of imported/failed rows if desired from 'allValidatedAssets' */}
+          <CardContent className="space-y-6">
+            {isProcessing && !importStats && (
+                <div className="flex items-center justify-center p-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="ml-2 text-muted-foreground">Finalizing import...</p>
+                </div>
+            )}
+            {importStats && (
+              <>
+                <div className={cn(
+                  "flex items-start space-x-3 rounded-md border p-4",
+                  importStats.failed > 0 && importStats.created === 0 ? "border-destructive/50 bg-destructive/10 text-destructive" :
+                  importStats.failed > 0 ? "border-yellow-400/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400" :
+                  "border-green-300 bg-green-50 p-4 text-green-700 dark:border-green-600 dark:bg-green-900/30 dark:text-green-400"
+                )}>
+                  {importStats.failed > 0 && importStats.created === 0 ? <AlertCircle className="h-6 w-6 flex-shrink-0" /> : <CheckCircle className="h-6 w-6 flex-shrink-0" />}
+                  <div>
+                    <p className="font-semibold">
+                      {importStats.failed > 0 && importStats.created === 0 ? "Import Failed" : 
+                       importStats.failed > 0 ? "Import Completed with Issues" : 
+                       "Import Completed Successfully"}
+                    </p>
+                    <p className="text-sm">
+                      {importStats.created > 0 && `Successfully imported ${importStats.created} out of ${importStats.total} records. `}
+                      {importStats.failed > 0 && `${importStats.failed} record(s) failed. `}
+                      (Success rate: {importStats.total > 0 ? ((importStats.created / importStats.total) * 100).toFixed(1) : '0.0'}%)
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="mb-4 text-lg font-semibold text-foreground">Import Summary</h3>
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    <StatBlock title="Total Records" value={importStats.total} bgColor="bg-card border" textColor="text-foreground" />
+                    <StatBlock title="Created" value={importStats.created} bgColor="bg-green-500" textColor="text-white" icon={<CheckCircle size={18} />} />
+                    <StatBlock title="Updated" value={importStats.updated} bgColor="bg-primary" textColor="text-primary-foreground" icon={<ListChecks size={18} />} />
+                    <StatBlock title="Failed" value={importStats.failed} bgColor="bg-destructive" textColor="text-destructive-foreground" icon={<XIcon size={18} />} />
+                  </div>
+                </div>
+              </>
+            )}
+            {!isProcessing && !importStats && (
+                 <p className="text-muted-foreground">No import results to display. Please start an import.</p>
+            )}
           </CardContent>
-          <CardFooter>
-            <Button onClick={resetStepper}>
-              <FileUp className="mr-2 h-4 w-4" /> Start New Import
+          <CardFooter className="mt-6 flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
+            <Button variant="outline" onClick={() => setCurrentStep(1)} className="w-full sm:w-auto" disabled={isProcessing}>
+              <ChevronLeft className="mr-2 h-4 w-4" /> BACK
             </Button>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <Button variant="outline" asChild className="w-full sm:w-auto" disabled={isProcessing}>
+                <Link href="/assets">
+                  <ListChecks className="mr-2 h-4 w-4" /> VIEW ASSETS
+                </Link>
+              </Button>
+              <Button onClick={resetStepper} className="w-full sm:w-auto" disabled={isProcessing}>
+                <FileUp className="mr-2 h-4 w-4" /> START NEW IMPORT
+              </Button>
+            </div>
           </CardFooter>
         </Card>
       )}
@@ -767,12 +893,10 @@ export function BulkImportStepper() {
   );
 }
 
-const AlertInfo = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="16" x2="12" y2="12" />
-    <line x1="12" y1="8" x2="12.01" y2="8" />
-  </svg>
-);
+// Utility component for icon, removed as it's not needed anymore
+// const AlertInfo = (props: React.SVGProps<SVGSVGElement>) => ( ... );
 
-export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger }; // Already imported
+export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger };
+
+
+    
