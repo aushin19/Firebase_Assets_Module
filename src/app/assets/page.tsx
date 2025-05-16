@@ -3,6 +3,7 @@ import { AssetDataTable } from "@/components/assets/asset-data-table";
 import { mockAssets } from "@/data/mock-assets";
 import { FileSpreadsheet, UploadCloud } from "lucide-react";
 import type { Asset } from "@/types";
+import Link from "next/link";
 
 // This would typically be a server component fetching data
 async function getAssets(): Promise<Asset[]> {
@@ -21,9 +22,11 @@ export default async function AssetsPage() {
           <p className="text-muted-foreground">Manage and track all your company assets.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
-            <UploadCloud className="mr-2 h-4 w-4" />
-            Bulk Import
+          <Button variant="outline" asChild>
+            <Link href="/assets/import">
+              <UploadCloud className="mr-2 h-4 w-4" />
+              Bulk Import
+            </Link>
           </Button>
           <Button variant="outline">
             <FileSpreadsheet className="mr-2 h-4 w-4" />
