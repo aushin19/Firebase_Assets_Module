@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
@@ -39,7 +40,7 @@ export default function RootLayout({
           </Sidebar>
           <SidebarInset>
             <AppHeader />
-            <main className="flex-1 p-4 md:p-6 lg:p-8">
+            <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
               {children}
             </main>
           </SidebarInset>
