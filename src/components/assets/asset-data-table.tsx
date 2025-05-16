@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -15,6 +16,7 @@ import {
   type ColumnFiltersState,
 } from "@tanstack/react-table";
 import { ArrowUpDown, ChevronDown, Search, Eye } from "lucide-react";
+import { motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -152,6 +154,11 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = React.useState('');
   const [columnVisibility, setColumnVisibility] = React.useState({})
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const table = useReactTable({
     data: assets,
@@ -171,6 +178,32 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
     },
     getRowId: row => row.deviceId, 
   });
+
+  if (!mounted) {
+    // Basic skeleton loader
+    return (
+      <div className="w-full">
+        <div className="flex items-center py-4 gap-2">
+          <div className="relative w-full max-w-sm">
+            <div className="h-10 w-full bg-muted rounded-md animate-pulse" />
+          </div>
+          <div className="h-10 w-32 ml-auto bg-muted rounded-md animate-pulse" />
+        </div>
+        <div className="rounded-md border">
+          <div className="h-12 bg-muted/50 rounded-t-md animate-pulse" />
+          {Array(5).fill(null).map((_, i) => (
+            <div key={i} className="flex items-center p-4 border-b">
+              <div className="h-10 w-10 bg-muted rounded-md animate-pulse mr-3" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-3/4 bg-muted rounded animate-pulse" />
+                <div className="h-3 w-1/2 bg-muted rounded animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">
@@ -237,14 +270,17 @@ export function AssetDataTable({ assets }: AssetDataTableProps) {
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map((row, index) => (
                 <TableRow
+                  as={motion.tr}
                   key={row.id} 
                   data-state={row.getIsSelected() && "selected"}
                   className={cn(
-                    "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 duration-300 ease-out",
                     "hover:bg-muted/60 hover:shadow-md transition-all"
                   )}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>

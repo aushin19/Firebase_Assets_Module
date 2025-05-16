@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { SidebarProvider, Sidebar, SidebarInset, SidebarContent, SidebarHeader as ShadSidebarHeader, SidebarFooter as ShadSidebarFooter } from '@/components/ui/sidebar';
 import AppHeader from '@/components/layout/app-header';
 import AppSidebar from '@/components/layout/app-sidebar';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -40,9 +41,18 @@ export default function RootLayout({
           </Sidebar>
           <SidebarInset>
             <AppHeader />
-            <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 duration-500">
-              {children}
-            </main>
+            <AnimatePresence mode="wait">
+              <motion.main
+                key={children ? String(children) : 'empty'} // Unique key for AnimatePresence to detect changes
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto"
+              >
+                {children}
+              </motion.main>
+            </AnimatePresence>
           </SidebarInset>
         </SidebarProvider>
         <Toaster />

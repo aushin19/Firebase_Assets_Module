@@ -18,6 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Label } from '../ui/label';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type DataRow = Record<string, any>;
 type ColumnMapping = Record<string, string | null>; // CSV/JSON Header -> AssetFieldKey
@@ -75,22 +76,25 @@ interface StepProps {
 
 const StepperStep: React.FC<StepProps> = ({ stepNumber, title, isActive, isCompleted }) => (
   <div className="flex flex-col items-center">
-    <div
+    <motion.div
       className={cn(
         "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2",
         isActive ? "bg-primary text-primary-foreground border-primary" :
         isCompleted ? "bg-green-500 text-white border-green-500" :
         "bg-muted text-muted-foreground border-border"
       )}
+      initial={{ scale: 0.8 }}
+      animate={{ scale: 1 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
     >
       {isCompleted && !isActive ? <Check size={16} /> : stepNumber}
-    </div>
+    </motion.div>
     <p className={cn("mt-1 text-xs text-center", isActive ? "text-primary font-semibold" : "text-muted-foreground")}>{title}</p>
   </div>
 );
 
 const StepperConnector: React.FC<{isCompleted?: boolean; isActive?:boolean}> = ({isCompleted, isActive}) => (
-   <div className={cn("flex-1 border-b-2 self-start mt-4", (isCompleted || isActive) ? "border-primary" : "border-border")} />
+   <div className={cn("flex-1 border-b-2 self-start mt-4 transition-colors", (isCompleted || isActive) ? "border-primary" : "border-border")} />
 );
 
 const getFieldLabel = (fieldKey: string): string => {
@@ -136,13 +140,23 @@ interface StatBlockProps {
 }
 
 const StatBlock: React.FC<StatBlockProps> = ({ title, value, bgColor, textColor, icon }) => (
-  <div className={cn("p-4 rounded-lg shadow flex flex-col items-center justify-center text-center h-28", bgColor, textColor)}>
+  <motion.div 
+    className={cn("p-4 rounded-lg shadow flex flex-col items-center justify-center text-center h-28", bgColor, textColor)}
+    initial={{ opacity: 0, scale: 0.9 }}
+    animate={{ opacity: 1, scale: 1 }}
+    transition={{ duration: 0.3 }}
+  >
     {icon && <div className="mb-1">{icon}</div>}
     <p className="text-2xl font-bold">{value}</p>
     <p className="text-xs">{title}</p>
-  </div>
+  </motion.div>
 );
 
+const cardVariants = {
+  hidden: { opacity: 0, x: 50 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.4, ease: "easeInOut" } },
+  exit: { opacity: 0, x: -50, transition: { duration: 0.3, ease: "easeInOut" } }
+};
 
 export function BulkImportStepper() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -479,6 +493,414 @@ export function BulkImportStepper() {
   const invalidPreviewCount = previewData.filter(item => !item._isValid).length;
   const allPreviewItemsValid = hasPreviewData && invalidPreviewCount === 0;
 
+  const renderStepContent = () => {
+    switch(currentStep) {
+      case 1:
+        return (
+          <motion.div key="step1" variants={cardVariants} initial="hidden" animate="visible" exit="exit">
+            <Card>
+              <CardHeader>
+                <CardTitle>Upload Asset Data File</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div
+                  className="flex flex-col items-center justify-center p-10 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary transition-colors"
+                  onClick={handleBrowseClick}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      const droppedFile = e.dataTransfer.files[0];
+                       if (droppedFile.type === 'text/csv' || droppedFile.name.endsWith('.csv') || droppedFile.type === 'application/json' || droppedFile.name.endsWith('.json')) {
+                        setFile(droppedFile);
+                        toast({ title: 'File Dropped', description: droppedFile.name });
+                      } else {
+                        toast({ title: 'Invalid File Type', description: 'Please drop a CSV or JSON file.', variant: 'destructive' });
+                      }
+                    }
+                  }}
+                >
+                  <UploadCloud className="w-12 h-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground mb-2">Drag and drop a file here or click to browse</p>
+                  <Button type="button" variant="default" onClick={(e) => { e.stopPropagation(); handleBrowseClick(); }}>
+                    <UploadCloud className="mr-2 h-4 w-4" /> BROWSE FILES
+                  </Button>
+                  <Input
+                    type="file"
+                    accept=".csv,.json,application/json,text/csv"
+                    onChange={handleFileChange}
+                    className="hidden"
+                    ref={fileInputRef}
+                  />
+                </div>
+                {file && <p className="text-sm text-muted-foreground text-center mt-2">Selected file: {file.name}</p>}
+
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>Supported formats: CSV (.csv), JSON (.json)</p>
+                  <p>Maximum file size: 10MB (example limit)</p>
+                </div>
+                <Alert variant="default" className="bg-secondary/30">
+                  <ListChecks className="h-4 w-4 text-primary" />
+                  <AlertTitle className="font-semibold text-foreground">Note</AlertTitle>
+                  <AlertDescription className="text-muted-foreground">
+                    For CSV, the file should contain asset data with column headers. For JSON, provide an array of asset objects. In the next step, you will map columns/keys to database fields.
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+              <CardFooter className="justify-between">
+                <Button variant="outline" onClick={() => {/* No back action */}} disabled>
+                  BACK
+                </Button>
+                <Button onClick={parseFile} disabled={!file || isProcessing}>
+                  {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  NEXT <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardFooter>
+            </Card>
+          </motion.div>
+        );
+      case 2:
+        return (
+          <motion.div key="step2" variants={cardVariants} initial="hidden" animate="visible" exit="exit">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center"><ListChecks className="mr-2 h-6 w-6 text-primary"/>Map Fields from Import File to Database Fields</CardTitle>
+                <CardDescription>Match the columns (from CSV) or keys (from JSON) from your file to the corresponding asset fields. Required target fields are marked (*).</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-6 space-y-4 p-4 border rounded-md bg-secondary/20">
+                  <h3 className="text-md font-semibold text-foreground">Import Options</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="updateExistingRecords" className="text-sm font-medium text-muted-foreground">Update Existing Records</Label>
+                      <Select value={updateExisting} onValueChange={setUpdateExisting}>
+                        <SelectTrigger id="updateExistingRecords" className="mt-1">
+                          <SelectValue placeholder="Select option..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="yes_update">Yes - Update if record exists</SelectItem>
+                          <SelectItem value="no_skip">No - Skip if record exists</SelectItem>
+                          <SelectItem value="no_create_new">No - Create new record always</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="errorHandling" className="text-sm font-medium text-muted-foreground">Error Handling</Label>
+                      <Select value={errorHandling} onValueChange={setErrorHandling}>
+                        <SelectTrigger id="errorHandling" className="mt-1">
+                          <SelectValue placeholder="Select option..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="no_stop">No - Stop import on first error</SelectItem>
+                          <SelectItem value="yes_skip">Yes - Skip rows with errors</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                <ScrollArea className="max-h-[400px] w-full overflow-auto border rounded-md">
+                  <Table className="min-w-full">
+                    <TableHeader className="sticky top-0 bg-card z-10">
+                      <TableRow>
+                        <TableHead className="w-[25%]">SOURCE FIELD (FILE)</TableHead>
+                        <TableHead className="w-[35%]">TARGET FIELD (DATABASE)</TableHead>
+                        <TableHead className="w-[15%]">DATA TYPE</TableHead>
+                        <TableHead className="w-[15%]">REQUIRED</TableHead>
+                        <TableHead className="w-[10%] text-center">ACTIONS</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {fileHeaders.length > 0 ? fileHeaders.map(fileHeaderKey => (
+                        <TableRow key={fileHeaderKey}>
+                          <TableCell className="font-medium py-3">{fileHeaderKey}</TableCell>
+                          <TableCell className="py-2">
+                            <Select
+                              value={columnMapping[fileHeaderKey] || ''}
+                              onValueChange={(value) => handleMappingChange(fileHeaderKey, value === 'none' ? null : value)}
+                            >
+                              <SelectTrigger id={`map-${fileHeaderKey}`}>
+                                <SelectValue placeholder="-- Do Not Import --" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">-- Do Not Import --</SelectItem>
+                                {ASSET_FIELDS_TO_MAP.map(assetField => (
+                                  <SelectItem key={assetField} value={assetField}>
+                                    {getFieldLabel(assetField)}
+                                    {REQUIRED_ASSET_FIELDS.includes(assetField) && <span className="text-destructive ml-1">*</span>}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground py-3">String</TableCell>
+                          <TableCell className="text-muted-foreground py-3">
+                            {columnMapping[fileHeaderKey] && REQUIRED_ASSET_FIELDS.includes(columnMapping[fileHeaderKey]!)
+                              ? <span className="text-destructive font-semibold">Yes</span>
+                              : 'No'}
+                          </TableCell>
+                          <TableCell className="text-center py-3">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleMappingChange(fileHeaderKey, null)} title="Clear mapping">
+                              <XIcon size={16} />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )) : (
+                        <TableRow>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
+                                No file headers found or file not parsed yet.
+                            </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+                <Alert variant="default" className="mt-6 bg-secondary/30">
+                    <AlertCircle className="h-4 w-4 text-primary" />
+                    <AlertTitle className="font-semibold text-foreground">Mapping Complex Data</AlertTitle>
+                    <AlertDescription className="text-muted-foreground">
+                      For arrays (e.g., Tags) use comma-separated strings in your source file. For nested objects, ensure your source keys match the dot-notation target fields (e.g., 'hardware.vendor').
+                    </AlertDescription>
+                </Alert>
+              </CardContent>
+              <CardFooter className="justify-between mt-6">
+                <Button variant="outline" onClick={() => setCurrentStep(1)} disabled={isProcessing}>
+                  <ChevronLeft className="mr-2 h-4 w-4" /> BACK
+                </Button>
+                <Button onClick={generatePreview} disabled={isProcessing || fileData.length === 0 || Object.values(columnMapping).every(v => v === null)}>
+                  {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
+                  PREVIEW & VALIDATE <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardFooter>
+            </Card>
+          </motion.div>
+        );
+      case 3:
+        return (
+          <motion.div key="step3" variants={cardVariants} initial="hidden" animate="visible" exit="exit">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Eye className="mr-2 h-6 w-6 text-primary"/>Validate Import Data
+                </CardTitle>
+                <CardDescription>Review the validation status of your import data preview. Only the first 10 rows are shown for preview.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isProcessing ? (
+                  <div className="flex items-center justify-center p-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="ml-2 text-muted-foreground">Validating data...</p>
+                  </div>
+                ) : !hasPreviewData && fileData.length > 0 ? (
+                    <Alert variant="default">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>No Preview Data</AlertTitle>
+                        <AlertDescription>
+                         Could not generate preview. Check field mappings for required fields or file structure. Ensure data rows exist in your file.
+                        </AlertDescription>
+                    </Alert>
+                ) : !hasPreviewData && fileData.length === 0 ? (
+                     <Alert variant="default">
+                        <AlertCircle className="h-4 w-4" /> {/* Changed to AlertCircle for consistency */}
+                        <AlertTitle>No Data Uploaded</AlertTitle>
+                        <AlertDescription>
+                         The uploaded file seems to be empty or could not be parsed. Please go back and upload a file with data.
+                        </AlertDescription>
+                    </Alert>
+                ) : allPreviewItemsValid ? (
+                  <div className="space-y-6">
+                    <div className="flex items-start space-x-3 rounded-md border border-green-300 bg-green-50 p-4 text-green-700 dark:border-green-600 dark:bg-green-900/30 dark:text-green-400">
+                      <CheckCircle className="h-6 w-6 flex-shrink-0 text-green-500 dark:text-green-400" />
+                      <div>
+                        <p className="font-semibold">Validation Successful</p>
+                        <p className="text-sm">No validation errors found in the previewed data. The data is ready to be imported.</p>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2 text-foreground">Validation Summary</h3>
+                      <div className="flex items-center space-x-2 text-green-700 dark:text-green-400">
+                        <CheckCircle className="h-5 w-5" />
+                        <p className="font-medium">All {validPreviewCount} previewed record(s) are valid.</p>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Click 'IMPORT' to proceed with importing all {fileData.length} records from the file into the database (simulation).
+                      </p>
+                    </div>
+                  </div>
+                ) : ( // hasPreviewData && invalidPreviewCount > 0
+                  <div className="space-y-4">
+                    <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Validation Issues Found</AlertTitle>
+                        <AlertDescription>
+                        {invalidPreviewCount} of {previewData.length} previewed records have errors. Please review the table below. 
+                        Rows with errors will be skipped if you proceed with the import and 'Skip rows with errors' option is selected.
+                        Otherwise, the import may stop.
+                        </AlertDescription>
+                    </Alert>
+                    <ScrollArea className="h-[400px] border rounded-md">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-card z-10">
+                          <TableRow>
+                            <TableHead className="w-12">Status</TableHead>
+                            {fileHeaders.filter(fh => columnMapping[fh]).map(fh => (
+                              <TableHead key={fh}>{getFieldLabel(columnMapping[fh]!)}</TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {previewData.map((item, index) => (
+                            <TableRow key={index} className={!item._isValid ? 'bg-destructive/10 hover:bg-destructive/20' : 'hover:bg-muted/50'}>
+                              <TableCell className="py-3">
+                                {item._isValid ? (
+                                  <CheckCircle className="h-5 w-5 text-green-500" />
+                                ) : (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <AlertCircle className="h-5 w-5 text-destructive cursor-help" />
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs bg-destructive text-destructive-foreground p-2 rounded-md shadow-lg" side="right">
+                                        <ul className="list-disc pl-4 text-xs space-y-1">
+                                          {Object.entries(item._validationErrors).map(([key,errMsg]) => (
+                                            <li key={key}><strong>{key.startsWith('_unmapped_') ? getFieldLabel(key.replace('_unmapped_','')) : getFieldLabel(columnMapping[key] || key) || key}:</strong> {String(errMsg)}</li>
+                                          ))}
+                                        </ul>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                              </TableCell>
+                              {fileHeaders.filter(fh => columnMapping[fh]).map(fileHeaderKey => {
+                                const assetFieldKey = columnMapping[fileHeaderKey]!;
+                                const keys = assetFieldKey.split('.');
+                                let displayValue = item as any;
+                                try {
+                                    for (const key of keys) {
+                                        const arrayMatch = key.match(/^(.*)\[(\d+)\]$/);
+                                        if (arrayMatch) {
+                                            displayValue = displayValue?.[arrayMatch[1]]?.[parseInt(arrayMatch[2])];
+                                        } else {
+                                            displayValue = displayValue?.[key];
+                                        }
+                                        if (displayValue === undefined) break;
+                                    }
+                                } catch (e) { displayValue = undefined; }
+
+                                if (typeof displayValue === 'object' && displayValue !== null) {
+                                    displayValue = JSON.stringify(displayValue);
+                                } else if (typeof displayValue === 'boolean') {
+                                    displayValue = displayValue ? 'True' : 'False';
+                                }
+
+                                return (
+                                  <TableCell key={fileHeaderKey} className="py-3 text-sm">
+                                    <div className={cn(item._validationErrors[fileHeaderKey] ? 'text-destructive' : '')}>
+                                      {displayValue !== undefined && displayValue !== null ? String(displayValue) : <span className="italic text-muted-foreground">empty</span>}
+                                    </div>
+                                    {item._validationErrors[fileHeaderKey] && (
+                                        <span className="text-xs text-destructive block mt-0.5">{item._validationErrors[fileHeaderKey]}</span>
+                                    )}
+                                  </TableCell>
+                                );
+                              })}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  </div>
+                )}
+              </CardContent>
+              <CardFooter className="justify-between mt-6">
+                <Button variant="outline" onClick={() => setCurrentStep(2)} disabled={isProcessing}>
+                  <ChevronLeft className="mr-2 h-4 w-4" /> BACK
+                </Button>
+                <Button 
+                  onClick={handleImport} 
+                  disabled={isProcessing || !hasPreviewData || (errorHandling === "no_stop" && invalidPreviewCount > 0 && fileData.length > 0)}
+                >
+                  {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  IMPORT
+                </Button>
+              </CardFooter>
+            </Card>
+          </motion.div>
+        );
+      case 4:
+        return (
+          <motion.div key="step4" variants={cardVariants} initial="hidden" animate="visible" exit="exit">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center"><CheckCircle className="mr-2 h-6 w-6 text-green-500"/>Import Results</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {isProcessing && !importStats && (
+                    <div className="flex items-center justify-center p-10">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="ml-2 text-muted-foreground">Finalizing import...</p>
+                    </div>
+                )}
+                {importStats && (
+                  <>
+                    <div className={cn(
+                      "flex items-start space-x-3 rounded-md border p-4",
+                      importStats.failed > 0 && importStats.created === 0 ? "border-destructive/50 bg-destructive/10 text-destructive" :
+                      importStats.failed > 0 ? "border-yellow-400/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400" :
+                      "border-green-300 bg-green-50 p-4 text-green-700 dark:border-green-600 dark:bg-green-900/30 dark:text-green-400"
+                    )}>
+                      {importStats.failed > 0 && importStats.created === 0 ? <AlertCircle className="h-6 w-6 flex-shrink-0" /> : <CheckCircle className="h-6 w-6 flex-shrink-0" />}
+                      <div>
+                        <p className="font-semibold">
+                          {importStats.failed > 0 && importStats.created === 0 ? "Import Failed" : 
+                           importStats.failed > 0 ? "Import Completed with Issues" : 
+                           "Import Completed Successfully"}
+                        </p>
+                        <p className="text-sm">
+                          {importStats.created > 0 && `Successfully imported ${importStats.created} out of ${importStats.total} records. `}
+                          {importStats.failed > 0 && `${importStats.failed} record(s) failed. `}
+                          (Success rate: {importStats.total > 0 ? ((importStats.created / importStats.total) * 100).toFixed(1) : '0.0'}%)
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="mb-4 text-lg font-semibold text-foreground">Import Summary</h3>
+                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <StatBlock title="Total Records" value={importStats.total} bgColor="bg-card border" textColor="text-foreground" />
+                        <StatBlock title="Created" value={importStats.created} bgColor="bg-green-500" textColor="text-white" icon={<CheckCircle size={18} />} />
+                        <StatBlock title="Updated" value={importStats.updated} bgColor="bg-primary" textColor="text-primary-foreground" icon={<ListChecks size={18} />} />
+                        <StatBlock title="Failed" value={importStats.failed} bgColor="bg-destructive" textColor="text-destructive-foreground" icon={<XIcon size={18} />} />
+                      </div>
+                    </div>
+                  </>
+                )}
+                {!isProcessing && !importStats && (
+                     <p className="text-muted-foreground">No import results to display. Please start an import.</p>
+                )}
+              </CardContent>
+              <CardFooter className="mt-6 flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
+                <Button variant="outline" onClick={() => setCurrentStep(1)} className="w-full sm:w-auto" disabled={isProcessing}>
+                  <ChevronLeft className="mr-2 h-4 w-4" /> BACK
+                </Button>
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                  <Button variant="outline" asChild className="w-full sm:w-auto" disabled={isProcessing}>
+                    <Link href="/assets">
+                      <ListChecks className="mr-2 h-4 w-4" /> VIEW ASSETS
+                    </Link>
+                  </Button>
+                  <Button onClick={resetStepper} className="w-full sm:w-auto" disabled={isProcessing}>
+                    <FileUp className="mr-2 h-4 w-4" /> START NEW IMPORT
+                  </Button>
+                </div>
+              </CardFooter>
+            </Card>
+          </motion.div>
+        );
+      default:
+        return null;
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -495,400 +917,9 @@ export function BulkImportStepper() {
           </React.Fragment>
         ))}
       </div>
-
-      {currentStep === 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Upload Asset Data File</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div
-              className="flex flex-col items-center justify-center p-10 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary transition-colors"
-              onClick={handleBrowseClick}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                  const droppedFile = e.dataTransfer.files[0];
-                   if (droppedFile.type === 'text/csv' || droppedFile.name.endsWith('.csv') || droppedFile.type === 'application/json' || droppedFile.name.endsWith('.json')) {
-                    setFile(droppedFile);
-                    toast({ title: 'File Dropped', description: droppedFile.name });
-                  } else {
-                    toast({ title: 'Invalid File Type', description: 'Please drop a CSV or JSON file.', variant: 'destructive' });
-                  }
-                }
-              }}
-            >
-              <UploadCloud className="w-12 h-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground mb-2">Drag and drop a file here or click to browse</p>
-              <Button type="button" variant="default" onClick={(e) => { e.stopPropagation(); handleBrowseClick(); }}>
-                <UploadCloud className="mr-2 h-4 w-4" /> BROWSE FILES
-              </Button>
-              <Input
-                type="file"
-                accept=".csv,.json,application/json,text/csv"
-                onChange={handleFileChange}
-                className="hidden"
-                ref={fileInputRef}
-              />
-            </div>
-            {file && <p className="text-sm text-muted-foreground text-center mt-2">Selected file: {file.name}</p>}
-
-            <div className="text-sm text-muted-foreground space-y-1">
-              <p>Supported formats: CSV (.csv), JSON (.json)</p>
-              <p>Maximum file size: 10MB (example limit)</p>
-            </div>
-            <Alert variant="default" className="bg-secondary/30">
-              <ListChecks className="h-4 w-4 text-primary" />
-              <AlertTitle className="font-semibold text-foreground">Note</AlertTitle>
-              <AlertDescription className="text-muted-foreground">
-                For CSV, the file should contain asset data with column headers. For JSON, provide an array of asset objects. In the next step, you will map columns/keys to database fields.
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-          <CardFooter className="justify-between">
-            <Button variant="outline" onClick={() => {/* No back action */}} disabled>
-              BACK
-            </Button>
-            <Button onClick={parseFile} disabled={!file || isProcessing}>
-              {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              NEXT <ChevronRight className="ml-2 h-4 w-4" />
-            </Button>
-          </CardFooter>
-        </Card>
-      )}
-
-      {currentStep === 2 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center"><ListChecks className="mr-2 h-6 w-6 text-primary"/>Map Fields from Import File to Database Fields</CardTitle>
-            <CardDescription>Match the columns (from CSV) or keys (from JSON) from your file to the corresponding asset fields. Required target fields are marked (*).</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-6 space-y-4 p-4 border rounded-md bg-secondary/20">
-              <h3 className="text-md font-semibold text-foreground">Import Options</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="updateExistingRecords" className="text-sm font-medium text-muted-foreground">Update Existing Records</Label>
-                  <Select value={updateExisting} onValueChange={setUpdateExisting}>
-                    <SelectTrigger id="updateExistingRecords" className="mt-1">
-                      <SelectValue placeholder="Select option..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="yes_update">Yes - Update if record exists</SelectItem>
-                      <SelectItem value="no_skip">No - Skip if record exists</SelectItem>
-                      <SelectItem value="no_create_new">No - Create new record always</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="errorHandling" className="text-sm font-medium text-muted-foreground">Error Handling</Label>
-                  <Select value={errorHandling} onValueChange={setErrorHandling}>
-                    <SelectTrigger id="errorHandling" className="mt-1">
-                      <SelectValue placeholder="Select option..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="no_stop">No - Stop import on first error</SelectItem>
-                      <SelectItem value="yes_skip">Yes - Skip rows with errors</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            <ScrollArea className="max-h-[400px] w-full overflow-auto border rounded-md">
-              <Table className="min-w-full">
-                <TableHeader className="sticky top-0 bg-card z-10">
-                  <TableRow>
-                    <TableHead className="w-[25%]">SOURCE FIELD (FILE)</TableHead>
-                    <TableHead className="w-[35%]">TARGET FIELD (DATABASE)</TableHead>
-                    <TableHead className="w-[15%]">DATA TYPE</TableHead>
-                    <TableHead className="w-[15%]">REQUIRED</TableHead>
-                    <TableHead className="w-[10%] text-center">ACTIONS</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {fileHeaders.length > 0 ? fileHeaders.map(fileHeaderKey => (
-                    <TableRow key={fileHeaderKey}>
-                      <TableCell className="font-medium py-3">{fileHeaderKey}</TableCell>
-                      <TableCell className="py-2">
-                        <Select
-                          value={columnMapping[fileHeaderKey] || ''}
-                          onValueChange={(value) => handleMappingChange(fileHeaderKey, value === 'none' ? null : value)}
-                        >
-                          <SelectTrigger id={`map-${fileHeaderKey}`}>
-                            <SelectValue placeholder="-- Do Not Import --" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">-- Do Not Import --</SelectItem>
-                            {ASSET_FIELDS_TO_MAP.map(assetField => (
-                              <SelectItem key={assetField} value={assetField}>
-                                {getFieldLabel(assetField)}
-                                {REQUIRED_ASSET_FIELDS.includes(assetField) && <span className="text-destructive ml-1">*</span>}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground py-3">String</TableCell>
-                      <TableCell className="text-muted-foreground py-3">
-                        {columnMapping[fileHeaderKey] && REQUIRED_ASSET_FIELDS.includes(columnMapping[fileHeaderKey]!)
-                          ? <span className="text-destructive font-semibold">Yes</span>
-                          : 'No'}
-                      </TableCell>
-                      <TableCell className="text-center py-3">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleMappingChange(fileHeaderKey, null)} title="Clear mapping">
-                          <XIcon size={16} />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )) : (
-                    <TableRow>
-                        <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
-                            No file headers found or file not parsed yet.
-                        </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-            <Alert variant="default" className="mt-6 bg-secondary/30">
-                <AlertCircle className="h-4 w-4 text-primary" />
-                <AlertTitle className="font-semibold text-foreground">Mapping Complex Data</AlertTitle>
-                <AlertDescription className="text-muted-foreground">
-                  For arrays (e.g., Tags) use comma-separated strings in your source file. For nested objects, ensure your source keys match the dot-notation target fields (e.g., 'hardware.vendor').
-                </AlertDescription>
-            </Alert>
-          </CardContent>
-          <CardFooter className="justify-between mt-6">
-            <Button variant="outline" onClick={() => setCurrentStep(1)} disabled={isProcessing}>
-              <ChevronLeft className="mr-2 h-4 w-4" /> BACK
-            </Button>
-            <Button onClick={generatePreview} disabled={isProcessing || fileData.length === 0 || Object.values(columnMapping).every(v => v === null)}>
-              {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
-              PREVIEW & VALIDATE <ChevronRight className="ml-2 h-4 w-4" />
-            </Button>
-          </CardFooter>
-        </Card>
-      )}
-
-      {currentStep === 3 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Eye className="mr-2 h-6 w-6 text-primary"/>Validate Import Data
-            </CardTitle>
-            <CardDescription>Review the validation status of your import data preview. Only the first 10 rows are shown for preview.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isProcessing ? (
-              <div className="flex items-center justify-center p-10">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="ml-2 text-muted-foreground">Validating data...</p>
-              </div>
-            ) : !hasPreviewData && fileData.length > 0 ? (
-                <Alert variant="default">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>No Preview Data</AlertTitle>
-                    <AlertDescription>
-                     Could not generate preview. Check field mappings for required fields or file structure. Ensure data rows exist in your file.
-                    </AlertDescription>
-                </Alert>
-            ) : !hasPreviewData && fileData.length === 0 ? (
-                 <Alert variant="default">
-                    <AlertCircle className="h-4 w-4" /> {/* Changed to AlertCircle for consistency */}
-                    <AlertTitle>No Data Uploaded</AlertTitle>
-                    <AlertDescription>
-                     The uploaded file seems to be empty or could not be parsed. Please go back and upload a file with data.
-                    </AlertDescription>
-                </Alert>
-            ) : allPreviewItemsValid ? (
-              <div className="space-y-6">
-                <div className="flex items-start space-x-3 rounded-md border border-green-300 bg-green-50 p-4 text-green-700 dark:border-green-600 dark:bg-green-900/30 dark:text-green-400">
-                  <CheckCircle className="h-6 w-6 flex-shrink-0 text-green-500 dark:text-green-400" />
-                  <div>
-                    <p className="font-semibold">Validation Successful</p>
-                    <p className="text-sm">No validation errors found in the previewed data. The data is ready to be imported.</p>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold mb-2 text-foreground">Validation Summary</h3>
-                  <div className="flex items-center space-x-2 text-green-700 dark:text-green-400">
-                    <CheckCircle className="h-5 w-5" />
-                    <p className="font-medium">All {validPreviewCount} previewed record(s) are valid.</p>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Click 'IMPORT' to proceed with importing all {fileData.length} records from the file into the database (simulation).
-                  </p>
-                </div>
-              </div>
-            ) : ( // hasPreviewData && invalidPreviewCount > 0
-              <div className="space-y-4">
-                <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Validation Issues Found</AlertTitle>
-                    <AlertDescription>
-                    {invalidPreviewCount} of {previewData.length} previewed records have errors. Please review the table below. 
-                    Rows with errors will be skipped if you proceed with the import and 'Skip rows with errors' option is selected.
-                    Otherwise, the import may stop.
-                    </AlertDescription>
-                </Alert>
-                <ScrollArea className="h-[400px] border rounded-md">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-card z-10">
-                      <TableRow>
-                        <TableHead className="w-12">Status</TableHead>
-                        {fileHeaders.filter(fh => columnMapping[fh]).map(fh => (
-                          <TableHead key={fh}>{getFieldLabel(columnMapping[fh]!)}</TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {previewData.map((item, index) => (
-                        <TableRow key={index} className={!item._isValid ? 'bg-destructive/10 hover:bg-destructive/20' : 'hover:bg-muted/50'}>
-                          <TableCell className="py-3">
-                            {item._isValid ? (
-                              <CheckCircle className="h-5 w-5 text-green-500" />
-                            ) : (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <AlertCircle className="h-5 w-5 text-destructive cursor-help" />
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-xs bg-destructive text-destructive-foreground p-2 rounded-md shadow-lg" side="right">
-                                    <ul className="list-disc pl-4 text-xs space-y-1">
-                                      {Object.entries(item._validationErrors).map(([key,errMsg]) => (
-                                        <li key={key}><strong>{key.startsWith('_unmapped_') ? getFieldLabel(key.replace('_unmapped_','')) : getFieldLabel(columnMapping[key] || key) || key}:</strong> {String(errMsg)}</li>
-                                      ))}
-                                    </ul>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                          </TableCell>
-                          {fileHeaders.filter(fh => columnMapping[fh]).map(fileHeaderKey => {
-                            const assetFieldKey = columnMapping[fileHeaderKey]!;
-                            const keys = assetFieldKey.split('.');
-                            let displayValue = item as any;
-                            try {
-                                for (const key of keys) {
-                                    const arrayMatch = key.match(/^(.*)\[(\d+)\]$/);
-                                    if (arrayMatch) {
-                                        displayValue = displayValue?.[arrayMatch[1]]?.[parseInt(arrayMatch[2])];
-                                    } else {
-                                        displayValue = displayValue?.[key];
-                                    }
-                                    if (displayValue === undefined) break;
-                                }
-                            } catch (e) { displayValue = undefined; }
-
-                            if (typeof displayValue === 'object' && displayValue !== null) {
-                                displayValue = JSON.stringify(displayValue);
-                            } else if (typeof displayValue === 'boolean') {
-                                displayValue = displayValue ? 'True' : 'False';
-                            }
-
-                            return (
-                              <TableCell key={fileHeaderKey} className="py-3 text-sm">
-                                <div className={cn(item._validationErrors[fileHeaderKey] ? 'text-destructive' : '')}>
-                                  {displayValue !== undefined && displayValue !== null ? String(displayValue) : <span className="italic text-muted-foreground">empty</span>}
-                                </div>
-                                {item._validationErrors[fileHeaderKey] && (
-                                    <span className="text-xs text-destructive block mt-0.5">{item._validationErrors[fileHeaderKey]}</span>
-                                )}
-                              </TableCell>
-                            );
-                          })}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              </div>
-            )}
-          </CardContent>
-          <CardFooter className="justify-between mt-6">
-            <Button variant="outline" onClick={() => setCurrentStep(2)} disabled={isProcessing}>
-              <ChevronLeft className="mr-2 h-4 w-4" /> BACK
-            </Button>
-            <Button 
-              onClick={handleImport} 
-              disabled={isProcessing || !hasPreviewData || (errorHandling === "no_stop" && invalidPreviewCount > 0 && fileData.length > 0)}
-            >
-              {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              IMPORT
-            </Button>
-          </CardFooter>
-        </Card>
-      )}
-
-      {currentStep === 4 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center"><CheckCircle className="mr-2 h-6 w-6 text-green-500"/>Import Results</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {isProcessing && !importStats && (
-                <div className="flex items-center justify-center p-10">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <p className="ml-2 text-muted-foreground">Finalizing import...</p>
-                </div>
-            )}
-            {importStats && (
-              <>
-                <div className={cn(
-                  "flex items-start space-x-3 rounded-md border p-4",
-                  importStats.failed > 0 && importStats.created === 0 ? "border-destructive/50 bg-destructive/10 text-destructive" :
-                  importStats.failed > 0 ? "border-yellow-400/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400" :
-                  "border-green-300 bg-green-50 p-4 text-green-700 dark:border-green-600 dark:bg-green-900/30 dark:text-green-400"
-                )}>
-                  {importStats.failed > 0 && importStats.created === 0 ? <AlertCircle className="h-6 w-6 flex-shrink-0" /> : <CheckCircle className="h-6 w-6 flex-shrink-0" />}
-                  <div>
-                    <p className="font-semibold">
-                      {importStats.failed > 0 && importStats.created === 0 ? "Import Failed" : 
-                       importStats.failed > 0 ? "Import Completed with Issues" : 
-                       "Import Completed Successfully"}
-                    </p>
-                    <p className="text-sm">
-                      {importStats.created > 0 && `Successfully imported ${importStats.created} out of ${importStats.total} records. `}
-                      {importStats.failed > 0 && `${importStats.failed} record(s) failed. `}
-                      (Success rate: {importStats.total > 0 ? ((importStats.created / importStats.total) * 100).toFixed(1) : '0.0'}%)
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="mb-4 text-lg font-semibold text-foreground">Import Summary</h3>
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    <StatBlock title="Total Records" value={importStats.total} bgColor="bg-card border" textColor="text-foreground" />
-                    <StatBlock title="Created" value={importStats.created} bgColor="bg-green-500" textColor="text-white" icon={<CheckCircle size={18} />} />
-                    <StatBlock title="Updated" value={importStats.updated} bgColor="bg-primary" textColor="text-primary-foreground" icon={<ListChecks size={18} />} />
-                    <StatBlock title="Failed" value={importStats.failed} bgColor="bg-destructive" textColor="text-destructive-foreground" icon={<XIcon size={18} />} />
-                  </div>
-                </div>
-              </>
-            )}
-            {!isProcessing && !importStats && (
-                 <p className="text-muted-foreground">No import results to display. Please start an import.</p>
-            )}
-          </CardContent>
-          <CardFooter className="mt-6 flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
-            <Button variant="outline" onClick={() => setCurrentStep(1)} className="w-full sm:w-auto" disabled={isProcessing}>
-              <ChevronLeft className="mr-2 h-4 w-4" /> BACK
-            </Button>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              <Button variant="outline" asChild className="w-full sm:w-auto" disabled={isProcessing}>
-                <Link href="/assets">
-                  <ListChecks className="mr-2 h-4 w-4" /> VIEW ASSETS
-                </Link>
-              </Button>
-              <Button onClick={resetStepper} className="w-full sm:w-auto" disabled={isProcessing}>
-                <FileUp className="mr-2 h-4 w-4" /> START NEW IMPORT
-              </Button>
-            </div>
-          </CardFooter>
-        </Card>
-      )}
+      <AnimatePresence mode="wait">
+        {renderStepContent()}
+      </AnimatePresence>
     </div>
   );
 }

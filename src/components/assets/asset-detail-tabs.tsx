@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from "react";
@@ -6,6 +7,7 @@ import type { Asset, AssetSoftware, NetworkConnection, AssetVulnerability, Monit
 import { SecurityMitigationsTab } from "./security-mitigations-tab";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   FileText, HardDrive, Users, ListChecks, ShieldAlert, CalendarDays, Tag, MapPin, Binary, DollarSign, Layers, Network as NetworkIcon, Info, AlertTriangle, ClipboardCheck, Thermometer, GanttChartSquare, UserCheck, History, Settings2, Brain, Link as LinkIcon, Server, Eye, Activity, FileBadge, Users2 
 } from "lucide-react";
@@ -97,20 +99,30 @@ const navigationItems = [
   { value: "ai_mitigations", label: "AI Mitigations", icon: <Brain className="mr-2 h-4 w-4" /> },
 ];
 
-const AnimatedCard: React.FC<React.ComponentProps<typeof Card>> = ({ className, children, ...props }) => (
-  <Card className={cn("motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 duration-300", className)} {...props}>
-    {children}
-  </Card>
+const AnimatedCard: React.FC<React.ComponentProps<typeof Card> & {children: React.ReactNode}> = ({ className, children, ...props }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -20 }}
+    transition={{ duration: 0.3 }}
+  >
+    <Card className={cn(className)} {...props}>
+      {children}
+    </Card>
+  </motion.div>
 );
+
 
 export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
   const [activeSection, setActiveSection] = useState("overview");
 
   const renderSectionContent = () => {
+    // This key ensures AnimatePresence detects a change when activeSection updates
+    const key = activeSection; 
     switch (activeSection) {
       case "overview":
         return (
-          <AnimatedCard>
+          <AnimatedCard key={key}>
             <CardHeader>
               <CardTitle>Asset Overview</CardTitle>
               <CardDescription>General information about {asset.name}.</CardDescription>
@@ -152,7 +164,7 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
         );
       case "hardware":
         return (
-          <AnimatedCard>
+          <AnimatedCard key={key}>
             <CardHeader>
               <CardTitle>Hardware Details</CardTitle>
               <CardDescription>Information about the physical hardware components.</CardDescription>
@@ -188,7 +200,7 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
         );
       case "context":
         return (
-           <AnimatedCard>
+           <AnimatedCard key={key}>
             <CardHeader>
               <CardTitle>Contextual Information</CardTitle>
               <CardDescription>Location, system, and business process associations.</CardDescription>
@@ -240,7 +252,7 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
         );
       case "connections":
         return (
-          <AnimatedCard>
+          <AnimatedCard key={key}>
             <CardHeader>
               <CardTitle>Network Connections</CardTitle>
               <CardDescription>Details about network interfaces and connections. Found {asset.connections?.length || 0} connection(s).</CardDescription>
@@ -292,7 +304,7 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
         );
       case "software":
         return (
-          <AnimatedCard>
+          <AnimatedCard key={key}>
             <CardHeader>
               <CardTitle>OS, Firmware & Installed Software</CardTitle>
               <CardDescription>
@@ -317,7 +329,7 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
         );
       case "lifecycle":
         return (
-          <AnimatedCard>
+          <AnimatedCard key={key}>
             <CardHeader>
               <CardTitle>Lifecycle & Assignment</CardTitle>
               <CardDescription>Installation, warranty, lifecycle stage, and user assignment.</CardDescription>
@@ -346,7 +358,7 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
         );
       case "security":
         return (
-            <AnimatedCard>
+            <AnimatedCard key={key}>
                 <CardHeader>
                     <CardTitle>Security & Compliance Details</CardTitle>
                 </CardHeader>
@@ -414,7 +426,7 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
         );
       case "maintenance":
         return (
-          <AnimatedCard>
+          <AnimatedCard key={key}>
               <CardHeader>
                   <CardTitle>Maintenance Information</CardTitle>
               </CardHeader>
@@ -441,7 +453,7 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
         );
       case "monitoring":
         return (
-          <AnimatedCard>
+          <AnimatedCard key={key}>
               <CardHeader>
                   <CardTitle>Monitoring & Behavior</CardTitle>
               </CardHeader>
@@ -497,7 +509,7 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
         );
       case "risk":
         return (
-          <AnimatedCard>
+          <AnimatedCard key={key}>
             <CardHeader>
               <CardTitle>Risk Assessment</CardTitle>
               <CardDescription>Overall risk profile for {asset.name}.</CardDescription>
@@ -511,8 +523,7 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
           </AnimatedCard>
         );
       case "ai_mitigations":
-        // Ensure SecurityMitigationsTab is wrapped in AnimatedCard or similar if desired
-        return <SecurityMitigationsTab asset={asset} />;
+        return <AnimatedCard key={key}><SecurityMitigationsTab asset={asset} /></AnimatedCard>;
       default:
         return null;
     }
@@ -527,7 +538,7 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
               <Button
                 key={item.value}
                 variant={activeSection === item.value ? "secondary" : "ghost"}
-                className="w-full justify-start text-sm h-10 motion-safe:transition-colors motion-safe:duration-150"
+                className="w-full justify-start text-sm h-10 transition-colors duration-150"
                 onClick={() => setActiveSection(item.value)}
               >
                 {item.icon}
@@ -539,7 +550,9 @@ export function AssetDetailTabs({ asset }: AssetDetailTabsProps) {
       </nav>
 
       <div className="flex-1 min-w-0">
-        {renderSectionContent()}
+        <AnimatePresence mode="wait">
+          {renderSectionContent()}
+        </AnimatePresence>
       </div>
     </div>
   );
