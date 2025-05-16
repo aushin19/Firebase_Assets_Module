@@ -1,6 +1,7 @@
 
 "use client";
 
+import React from "react"; // Added React import
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import type { Asset, AssetSoftware } from "@/types"; // AssetSoftware matches the software objects in Device.software
